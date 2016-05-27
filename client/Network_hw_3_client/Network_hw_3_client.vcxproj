@@ -146,7 +146,6 @@
   <ItemGroup>
     <ClCompile Include="dlg_func.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="main_data.cpp" />
     <ClCompile Include="std_error.cpp" />
     <ClCompile Include="sock_func.cpp" />
   </ItemGroup>
@@ -157,7 +156,6 @@
     <ClInclude Include="std_error.h" />
     <ClInclude Include="std_lib.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="sock_lib.h" />
     <ClInclude Include="sock_func.h" />
   </ItemGroup>
   <ItemGroup>

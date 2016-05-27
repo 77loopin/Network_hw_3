@@ -1,4 +1,5 @@
-#include "std_lib.h"
+#include "main.h"
+
 
 void display_MB(char* msg) {
 	MessageBox(NULL, msg, "Error", MB_ICONERROR);

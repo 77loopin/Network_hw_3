@@ -4,17 +4,20 @@
 
 #pragma comment(lib, "ws2_32")
 #include "main.h"
-#include "resource.h"
 
-#include "std_lib.h"
-#include "std_error.h"
-#include "dlg_func.h"
-#include "data_type.h"
-
+/*
 CRITICAL_SECTION cs; // critical section에 접근 하기 위한 CS 변수 선언
 HINSTANCE hInst;
 WSADATA wsa_data;
-int a;
+*/
+
+HINSTANCE hInst;
+CRITICAL_SECTION cs;
+WSADATA wsa_data;
+SOCKET serverSocket;
+char userList[MAXUSER][MAXNICK + 1];
+
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	// Store instance
 	hInst = hInstance;

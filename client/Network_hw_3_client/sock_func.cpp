@@ -1,7 +1,12 @@
-//#include "sock_func.h"
-#include "sock_lib.h"
-#include "std_error.h"
-#include "data_type.h"
+#include "sock_func.h"
+
+
+
+
+DWORD WINAPI chatMsgSender(LPVOID arg) {
+	
+	return 0;
+}
 
 
 // ip와 port를 인자로 받아 SOCKET을 리턴해주는 함수
@@ -24,11 +29,11 @@ SOCKET getConnection(char* ip, int port) {
 		err_MB("socket()");
 		return -1;
 	}
-
+	
 	retval = connect(sock, (SOCKADDR*)&dest, sizeof(dest));
 
 	if (retval == SOCKET_ERROR) {
-		display_MB("서버와의 연결에 실패했습니다.\n\n다시 접속해주시기 바랍니다.\n\n");
+		//display_MB("서버와의 연결에 실패했습니다.\n\n서버 설정을 다시 확인해주시기 바랍니다.\n\n");
 		//err_MB("connect()");
 		return -1;
 	}
@@ -48,10 +53,21 @@ int sendToServer(SOCKET sock, int flag, int size, char* Data) {
 	header.flag = flag;
 	header.size = size;
 	
+	EnterCriticalSection(&cs);
 	sendSize = send(sock, (char*)&header, sizeof(header), 0);
 	sendSize = sendSize + send(sock, Data, size, 0);
+	LeaveCriticalSection(&cs);
 	
 	return sendSize;
+}
+
+int checkUserNick(SOCKET sock, char* nickname) {
+	
+	sendToServer(serverSocket, 2, sizeof(nickname) + 1, nickname);
+
+}
+
+int getUserList() {
 }
 
 
