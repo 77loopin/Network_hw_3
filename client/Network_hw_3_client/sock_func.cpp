@@ -3,6 +3,34 @@
 
 
 
+DWORD WINAPI MainReceiver(LPVOID arg) {
+	int retval;
+	int msgFlag;
+	BOOL sock_option;
+	SOCKET sock;
+	msgData msg;
+	msgHeader header;
+
+	sock = serverSocket;
+
+	recv(sock, (char*)&header, sizeof(header), 0);
+	switch (header.flag) {
+	case 1: // Chatting Connect Accept
+		
+	case 2: // Chatting Connect Deny
+
+	case 3: // Chatting User list
+
+	case 4: // Chatting Message
+
+	default:
+	}
+	
+	return 0;
+}
+
+
+
 DWORD WINAPI chatMsgSender(LPVOID arg) {
 	
 	return 0;
@@ -59,15 +87,6 @@ int sendToServer(SOCKET sock, int flag, int size, char* Data) {
 	LeaveCriticalSection(&cs);
 	
 	return sendSize;
-}
-
-int checkUserNick(SOCKET sock, char* nickname) {
-	
-	sendToServer(serverSocket, 2, sizeof(nickname) + 1, nickname);
-
-}
-
-int getUserList() {
 }
 
 

@@ -19,7 +19,6 @@ typedef struct PACKETDATA {
 	msgHeader header;
 	msgData data;
 } packetData;
-#endif
 
 typedef struct SETUPINFO {
 	char myNick[MAXNICK + 1];
@@ -27,3 +26,4 @@ typedef struct SETUPINFO {
 	int serverPort;
 	int connectFlag;
 }setupInfo;
+#endif
