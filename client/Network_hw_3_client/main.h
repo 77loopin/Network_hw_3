@@ -12,5 +12,7 @@ extern CRITICAL_SECTION cs;
 extern WSADATA wsa_data;
 extern SOCKET serverSocket;
 
-extern char userList[MAXUSER][MAXNICK + 1];
+extern UserList userList;
 extern setupInfo setup;
+
+extern HANDLE hMainRecv;

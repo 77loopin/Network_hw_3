@@ -15,10 +15,11 @@ HINSTANCE hInst;
 CRITICAL_SECTION cs;
 WSADATA wsa_data;
 SOCKET serverSocket;
-char userList[MAXUSER][MAXNICK + 1];
+UserList userList;
 
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+	int i;
 	// Store instance
 	hInst = hInstance;
 
@@ -28,6 +29,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
 		err_quit("WSAStartup()");
 	}
+
+	memset(&userList, 0, sizeof(userList));
 
 	// run DialogBox
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG1), NULL, main_DlgProc);

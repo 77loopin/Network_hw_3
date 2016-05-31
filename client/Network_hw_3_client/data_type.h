@@ -20,6 +20,20 @@ typedef struct PACKETDATA {
 	msgData data;
 } packetData;
 
+typedef struct SENDERARG {
+	SOCKET sock;
+	int flag;
+	int size;
+	char* Data;
+} senderArgument;
+
+typedef struct USERLIST {
+	struct USERLIST *next;
+	struct USERLIST *prev;
+	char Nick[MAXNICK + 1];
+} UserList;
+
+
 typedef struct SETUPINFO {
 	char myNick[MAXNICK + 1];
 	char serverIP[40];

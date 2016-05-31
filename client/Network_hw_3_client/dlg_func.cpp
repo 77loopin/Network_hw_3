@@ -10,6 +10,8 @@ HWND hIp;
 HWND hPort;
 HWND hNick;
 
+HANDLE hMainRecv;
+
 setupInfo setup;
 
 
@@ -33,13 +35,14 @@ BOOL CALLBACK main_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 		hEdit3 = GetDlgItem(hDlg, IDC_EDIT3); // 사용자 현황 ( 수정 예정 )
 		hMenu = GetDlgItem(hDlg, IDR_MENU1);
 
+		/*
 		if (setup.connectFlag == 1) {
 			display_MB("닉네임이 설정해야합니다.\n\n메뉴에서 닉네임을 설정해주세요.\n\n");
 			EnableWindow(hEdit3, FALSE);
-
 		}
-		
+		*/
 		SendMessage(hEdit3, EM_SETLIMITTEXT, MAXMSG, 0);
+		
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
@@ -70,6 +73,7 @@ BOOL CALLBACK main_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 			return TRUE;
 		case IDCANCEL: // 취소 버튼을 누른 경우
+			// 프로그램 종료 ( 소켓 종료 후 종료 )
 			EndDialog(hDlg, IDCANCEL); // 대화상자 종료, 즉 프로그램 종료
 			return TRUE;
 		case ID_40004 : //
@@ -91,6 +95,7 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	char port[6]; // 입력받은 port를 저장하는 임시 변수
 	int tempPort;
 	int iplen; // ip 문자열의 길이를 저장하는 변수
+	SOCKET tempSocket;
 
 	switch (uMsg) {
 	case WM_INITDIALOG: // DialogBox를 처음 실행 됐을 때 초기화
@@ -108,6 +113,7 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			iplen = GetWindowTextLength(hIp); // IP의 길이를 리턴
 			GetDlgItemText(hDlg, IDC_IPADDRESS1, ip, iplen + 1); // IP를 입력 받음
 			GetDlgItemText(hDlg, IDC_EDIT1, port, 6); // Port를 입력 받음
+			tempPort = atoi(port);
 			//GetDlgItemText(hDlg, IDC_EDIT2, Nick, MAXNICK + 1); // 대화명을 입력 받음
 
 			if (!check_ip(ip, iplen)) {
@@ -124,10 +130,6 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				EnableWindow(hDlg, TRUE);
 				return FALSE;
 			}
-
-			tempPort = atoi(port);
-			
-			display_MB("서버와 연결시도 중입니다.\n\n잠시만 기다려주세요.\n\n");
 			
 			// 임시로 127.0.0.1만 접속 가능하도록 했음 ( 추후 삭제하면 다른 서버 IP로도 접속 가능함 )
 			if (strncmp(ip, "127.0.0.1", iplen)) {
@@ -135,26 +137,40 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				EnableWindow(hDlg, TRUE);
 				return FALSE;
 			}
-			
+	
 			// 서버 접속 시도 ( Connection을 맺는다 )
-			serverSocket = getConnection(ip, tempPort);
-			// Receiver 생성
+			tempSocket = getConnection(ip, tempPort);
 			
-			if (serverSocket == -1) {
+			if (tempSocket == -1) {
 				MessageBox(hDlg, "서버와의 연결에 실패했습니다.\n\n서버 설정을 다시 확인해주시기 바랍니다.\n\n", "Error", MB_ICONERROR);
 				EnableWindow(hDlg, TRUE);
 				return FALSE;
 			}
 
+			if (setup.connectFlag == 0) {
+				MessageBox(hDlg, "서버와 접속되었습니다.\n\n", "", MB_OK);
+			}
+			// 기존에 접속했던 서버를 종료한다.
+			else if (setup.connectFlag == 2) {
+				MessageBox(hDlg, "새로운 서버와 접속 되었습니다.\n\n새로운 서버 접속을 위해 기존 서버를 종료합니다.\n\n", "Infomation", MB_ICONINFORMATION);
+				sendToServer(serverSocket, 5, 0, NULL); // 서버에 종료 메시지를 보낸다. flag = 5
+				TerminateThread(hMainRecv, 0);
+				closesocket(serverSocket);
+			}
+			
 			// 입력된 채팅방 설정값을 setup 구조체에 저장 ( critical section )
 			EnterCriticalSection(&cs);
 			strncpy(setup.serverIP, ip, 40);
 			setup.serverPort = tempPort;
+			serverSocket = tempSocket;
 			setup.connectFlag = 1; // 서버와 접속된 상태 ( 채팅방 입장 전 )
 			LeaveCriticalSection(&cs);
 			// leave critical section
 
-			MessageBox(hDlg, "서버와 접속되었습니다.\n\n","",MB_OK);
+			hMainRecv = NULL;
+			while (hMainRecv == NULL) {
+				hMainRecv = (HANDLE)_beginthreadex(NULL, 0, MainReceiver, NULL, 0, NULL);
+			}
 
 			EndDialog(hDlg, IDOK); // configuration dialog box finish
 			return TRUE;
@@ -204,12 +220,14 @@ BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 			// 대화명을 변경 했다는 것을 화면에 출력
 			MessageBox(hDlg, "닉네임을 변경했습니다.\n", "확인", MB_OK);
 			
+			EnableWindow(hDlg, TRUE);
 			EndDialog(hDlg, IDCANCEL); // 대화상자 종료
 			return TRUE;
 		case IDCANCEL: // 취소 버튼을 누른 경우 호출
 			if (setup.connectFlag == 1) {
 				MessageBox(hDlg, "NickName을 입력하지 않으면\n\n채팅방에 접속할 수 없습니다.\n\n", "경고", MB_ICONERROR);
 			}
+			EnableWindow(hDlg, TRUE);
 			EndDialog(hDlg, IDCANCEL); // 대화상자 종료
 			return TRUE;
 		}
@@ -250,7 +268,7 @@ void DisplayText(char *fmt, ...) {
 	char cbuf[MAXMSG + MAXNICK + 10];
 	vsprintf(cbuf, fmt, arg); // 입력된 문자열을 완성해서 cbuf에 저장한다.
 	int nLength = GetWindowTextLength(hEdit1); // 해당 문자열의 길이를 반환한다.
-	SendMessage(hEdit1, EM_SETSEL, nLength, nLength); // 현재 hEdit2의 길이 뒤로 포인터를 이동 한 후
+	SendMessage(hEdit1, EM_SETSEL, nLength, nLength); // 현재 hEdit1의 길이 뒤로 포인터를 이동 한 후
 	SendMessage(hEdit1, EM_REPLACESEL, FALSE, (LPARAM)cbuf); // 현재 위치에 cbuf 내용을 출력한다.
 	va_end(arg);
 }
