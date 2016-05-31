@@ -21,21 +21,36 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 		if (connectFlag == 1) { // 채팅방 미 접속 상태
 			switch (header.flag) {
 			case 1: // chatting room accept
+				recv(sock, nickname, header.size, 0); // nickname
 				EnterCriticalSection(&cs);
 				setup.connectFlag = 2;
-				strncpy(userList.Nick, setup.myNick, sizeof(setup.myNick) + 1);
+				strncpy(setup.myNick,nickname, header.size);
+				strncpy(userList.Nick, setup.myNick, header.size);
 				LeaveCriticalSection(&cs);
+				MessageBox(NULL,"반갑습니다.\n\n채팅방에 접속했습니다.\n\n","채팅방 접속 성공",MB_ICONINFORMATION);
 				break;
 			case 2: // chatting room deny
-				display_MB("닉네임을 설정해야합니다.\n\n메뉴에서 닉네임을 설정해주세요.\n\n");
+				MessageBox(NULL, "채팅방에 이미 존재하는 닉네임입니다.\n\n닉네임을 변경하세요.\n\n[설정] -> [닉네임 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
 				break;
-			case 3:
-				display_MB("채팅방이 꽉 찼습니다.\n\n다른 서버를 이용해주세요.\n\n");
+			case 3: // server deny
+				MessageBox(NULL, "더 이상 채팅방에 접속할 수 없습니다.\n\n다른 서버를 이용해주세요.\n\n[설정] -> [접속 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
+				// 일단 보류
 				break;
 			}
 		}
 		else if (connectFlag == 2) { // 채팅방 접속 상태
 			switch (header.flag) {
+			case 1:
+				recv(sock, nickname, header.size, 0); // nickname
+				EnterCriticalSection(&cs);
+				strncpy(setup.myNick, nickname, header.size);
+				strncpy(userList.Nick, setup.myNick, header.size);
+				LeaveCriticalSection(&cs);
+				MessageBox(NULL, "닉네임이 변경되었습니다.", "닉네임 변경", MB_ICONINFORMATION);
+				break;
+			case 2:
+				MessageBox(NULL, "채팅방에 이미 존재하는 닉네임입니다.", "닉네임 변경 실패", MB_ICONERROR);
+				break;
 			case 4: // chatting room user list add
 				recv(sock, nickname, header.size, 0); // nickname
 				addNickName(nickname);
@@ -57,7 +72,6 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 	}
 	return 0;
 }
-
 
 
 UINT WINAPI MsgSender(LPVOID arg) {
@@ -113,7 +127,7 @@ void addNickName(char* nick) {
 
 	temp = userList.next;
 	while (temp != NULL) {
-		if (!strncmp(temp->Nick, nick, sizeof(nick))) {
+		if (!strncmp(temp->Nick, nick, strlen(nick))) {
 			break;
 		}
 		temp = temp->next;
@@ -124,7 +138,7 @@ void addNickName(char* nick) {
 
 	// 없으면
 	temp = (UserList*)malloc(sizeof(UserList));
-	strncpy(temp->Nick, nick, sizeof(nick) + 1);
+	strncpy(temp->Nick, nick, strlen(nick) + 1);
 	temp->next = userList.next;
 	if (temp->next != NULL) {
 		temp->next->prev = temp;
@@ -142,7 +156,7 @@ int delNickName(char* nick) {
 	UserList* temp;
 	temp = userList.next;
 	while (temp != NULL) { // 삭제하려는 닉네임이 있으면
-		if (!strncmp(temp->Nick, nick, sizeof(nick))) {
+		if (!strncmp(temp->Nick, nick, strlen(nick))) {
 			temp->prev->next = temp->next;
 			if (temp->next != NULL) {
 				temp->next->prev = temp->prev;

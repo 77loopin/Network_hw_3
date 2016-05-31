@@ -3,6 +3,7 @@
 
 BOOL CALLBACK main_DlgProc(HWND, UINT, WPARAM, LPARAM);
 BOOL CALLBACK setup_DlgProc(HWND, UINT, WPARAM, LPARAM);
+BOOL CALLBACK nickSetup_DlgProc(HWND, UINT, WPARAM, LPARAM);
 
 void DisplayText(char *fmt, ...);
 BOOL check_ip(char*,int);

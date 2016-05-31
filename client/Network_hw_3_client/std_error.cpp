@@ -2,7 +2,7 @@
 
 
 void display_MB(char* msg) {
-	MessageBox(NULL, msg, "Error", MB_ICONERROR);
+	MessageBox(NULL, msg, "Information", MB_ICONINFORMATION);
 }
 
 void err_MB(char* msg) {
