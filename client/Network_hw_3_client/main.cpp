@@ -16,6 +16,7 @@ CRITICAL_SECTION cs;
 WSADATA wsa_data;
 SOCKET serverSocket;
 UserList userList;
+UserList* userListHeader = NULL;
 
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
@@ -31,6 +32,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 
 	memset(&userList, 0, sizeof(userList));
+
 
 	// run DialogBox
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG1), NULL, (DLGPROC)main_DlgProc);

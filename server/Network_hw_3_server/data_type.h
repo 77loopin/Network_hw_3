@@ -30,7 +30,8 @@ typedef struct SENDERARG {
 typedef struct USERLIST {
 	struct USERLIST *next;
 	struct USERLIST *prev;
-	SOCKET userSocket;
+	SOCKET clientSocket;
+	int connectFlag;
 	char Nick[MAXNICK + 1];
 } UserList;
 

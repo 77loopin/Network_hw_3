@@ -12,5 +12,8 @@ extern WSADATA wsa_data;
 
 extern UserList userList;
 extern setupInfo setup;
+extern SOCKET serverSocket;
+extern UserList* userListHeader;
+extern FD_SET fdSet;
 
 extern HANDLE hMainRecv;

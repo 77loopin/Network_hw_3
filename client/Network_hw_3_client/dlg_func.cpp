@@ -146,7 +146,7 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				MessageBox(hDlg, "PORT를 알 수 없습니다.\nPORT를 올바르게 입력하세요.\n\n[PORT는 1024 ~ 65535까지 가능]", "경고", MB_ICONERROR);
 				SetFocus(hPort);
 				EnableWindow(hDlg, TRUE);
-				return FALSE;
+				return FALSE;	
 			}
 
 			/*
@@ -240,7 +240,7 @@ BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 	case WM_INITDIALOG: // 프로그램을 처음 실행 했을 때 초기화
 		hEdit = GetDlgItem(hDlg, IDC_EDIT1); // IDC_EDIT1의 핸들을 가져온다.
 		SendMessage(hEdit, EM_SETLIMITTEXT, MAXNICK, 0); // 대화명의 최대 입력 크기를 설정한다.
-		MessageBox(hDlg, "NickName을 입력하세요.\n", "Information", MB_ICONINFORMATION);
+		//MessageBox(hDlg, "NickName을 입력하세요.\n", "Information", MB_ICONINFORMATION);
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
@@ -300,14 +300,63 @@ BOOL check_ip(char* ip_addr, int len) {
 
 	ptr = strtok(tempString, ".");
 
-	for (int i = 0; i < 2; i++) {
-		strtok(NULL, ".");
-	}
-
-	ptr = strtok(NULL, ".");
 	t = atoi(ptr);
-	if (t == 0 || t == 255) // IP주소의 마지막값이 0 또는 255이면 주소값 오류
+	if (t >= 0 && t <= 127) { // A Class
+		ptr = strtok(NULL, ".");
+		t = atoi(ptr);
+		if (t == 0) {
+			ptr = strtok(NULL, ".");
+			t = atoi(ptr);
+			if (t == 0) {
+				ptr = strtok(NULL, ".");
+				t = atoi(ptr);
+				if (t == 0) {
+					return FALSE;
+				}
+			}
+		}
+		else if (t == 255) {
+			ptr = strtok(NULL, ".");
+			t = atoi(ptr);
+			if (t == 255) {
+				ptr = strtok(NULL, ".");
+				t = atoi(ptr);
+				if (t == 255) {
+					return FALSE;
+				}
+			}
+		}
+	}
+	else if (t >= 128 && t <= 191) { // B Class
+		strtok(NULL, ".");
+		ptr = strtok(NULL, ".");
+		t = atoi(ptr);
+		if (t == 0) {
+			ptr = strtok(NULL, ".");
+			t = atoi(ptr);
+			if (t == 0) {
+				return FALSE;
+			}
+		}
+		else if (t == 255) {
+			ptr = strtok(NULL, ".");
+			t = atoi(ptr);
+			if (t == 255) {
+				return FALSE;
+			}
+		}
+	}
+	else if (t >= 192 && t <= 223) { // C Class
+		strtok(NULL, ".");
+		strtok(NULL, ".");
+		ptr = strtok(NULL, ".");
+		t = atoi(ptr);
+		if (t == 0 || t == 255) // IP주소의 마지막값이 0 또는 255이면 주소값 오류
+			return FALSE;
+	}
+	else {
 		return FALSE;
+	}
 
 	return TRUE;
 }

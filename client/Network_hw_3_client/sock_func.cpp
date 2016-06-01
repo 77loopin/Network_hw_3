@@ -122,39 +122,36 @@ SOCKET getConnection(char* ip, int port) {
 }
 
 
-void addNickName(char* nick) {
-	UserList *temp;
+void addUser(char* nick) {
+	UserList *temp1, *temp2;
 
-	temp = userList.next;
-	while (temp != NULL) {
-		if (!strncmp(temp->Nick, nick, strlen(nick))) {
+	temp1 = userListHeader;
+	while (temp1 != NULL) {
+		if (!strncmp(temp1->Nick, nick, strlen(nick))) {
 			break;
 		}
-		temp = temp->next;
+		temp2 = temp1;
+		temp1 = temp1->next;
 	}
 
-	if (temp != NULL) // 중복된 닉네임이 이미 있으면
+	if (temp1 != NULL) // 중복된 닉네임이 이미 있으면
 		return;
 
 	// 없으면
-	temp = (UserList*)malloc(sizeof(UserList));
-	strncpy(temp->Nick, nick, strlen(nick) + 1);
-	temp->next = userList.next;
-	if (temp->next != NULL) {
-		temp->next->prev = temp;
-	}
-	
-	userList.next = temp;
-	temp->prev = &userList;
-	
+	temp1 = (UserList*)malloc(sizeof(UserList));
+	strncpy(temp1->Nick, nick, strlen(nick) + 1);
+
+	temp1->next = temp2->next;
+	temp1->prev = temp2;
+	temp2->next = temp1;
 
 	return;
 }
 
 
-int delNickName(char* nick) {
-	UserList* temp;
-	temp = userList.next;
+int delUser(char* nick) {
+	UserList *temp;
+	temp = userListHeader;
 	while (temp != NULL) { // 삭제하려는 닉네임이 있으면
 		if (!strncmp(temp->Nick, nick, strlen(nick))) {
 			temp->prev->next = temp->next;

@@ -1,7 +1,7 @@
 #include "sock_func.h"
 
 
-
+/*
 UINT WINAPI MainReceiver(LPVOID arg) {
 	BOOL sock_option;
 	SOCKET sock;
@@ -52,11 +52,11 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 				break;
 			case 4: // chatting room user list add
 				recv(sock, nickname, header.size, 0); // nickname
-				addNickName(nickname);
+				//addNickName(nickname);
 				break;
 			case 5: // chatting room user list remove
 				recv(sock, nickname, header.size, 0); // nickname
-				delNickName(nickname);
+				//delNickName(nickname);
 				break;
 			case 6:
 				recv(sock, (char*)&msg, header.size, 0);
@@ -71,7 +71,7 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 	}
 	return 0;
 }
-
+*/
 
 UINT WINAPI MsgSender(LPVOID arg) {
 	int sendSize = 0;
@@ -91,11 +91,55 @@ UINT WINAPI MsgSender(LPVOID arg) {
 // ip와 port를 인자로 받아 SOCKET을 리턴해주는 함수
 // socket() -> connect()
 // 연결 실패시 -1을 리턴
+UINT WINAPI MainReceiver(LPVOID arg) {
+	SOCKET clientSocket;
+	SOCKADDR_IN clientInfo;
+	UserList* temp;
+	FD_SET fdSet;
+	int size = sizeof(clientInfo);
+	int retval;
 
-UINT WINAPI AcceptReceiver(LPVOID arg) {
-	static SOCKET sock;
+	while (1) {
+		FD_ZERO(&fdSet);
+		FD_SET(serverSocket, &fdSet); // accept listener FD_SET
+		temp = userListHeader;
+		
+		while (temp != NULL) {
+			FD_SET(temp->clientSocket, &fdSet); // client socket listencer
+			temp = temp->next;
+		}
+
+		retval = select(0,&fdSet, NULL, NULL, NULL);
+		if (retval == SOCKET_ERROR) {
+			err_MB("select()");
+			break;
+		}
+
+		if (FD_ISSET(serverSocket, &fdSet)) {
+			size = sizeof(clientInfo);
+			clientSocket = accept(serverSocket, (SOCKADDR*)&clientInfo, &size);
+			if (clientSocket == INVALID_SOCKET) {
+				err_MB("accept()");
+			}
+			else {
+				// 접속 상태 window에 출력
+			}
+			
+		}
+
+		
+		
+		
+	}
 
 	return 0;
+}
+
+UINT WINAPI MainRecv(LPVOID arg) {
+	int retval;
+
+	
+	
 }
 
 SOCKET getConnection(char* ip, int port) {
@@ -128,41 +172,40 @@ SOCKET getConnection(char* ip, int port) {
 }
 
 
-void addNickName(char* nick) {
-	UserList *temp;
+BOOL addUser(SOCKET sock) {
+	UserList *temp1,*temp2;
 
-	temp = userList.next;
-	while (temp != NULL) {
-		if (!strncmp(temp->Nick, nick, strlen(nick))) {
-			break;
+	temp1 = userListHeader;
+	
+	while (temp1->next != NULL) {
+
+		if (temp1->next->clientSocket == sock) {
+			return FALSE;
 		}
-		temp = temp->next;
+
+		temp1 = temp1->next;
 	}
 
-	if (temp != NULL) // 중복된 닉네임이 이미 있으면
-		return;
-
-	// 없으면
-	temp = (UserList*)malloc(sizeof(UserList));
-	strncpy(temp->Nick, nick, strlen(nick) + 1);
-	temp->next = userList.next;
-	if (temp->next != NULL) {
-		temp->next->prev = temp;
-	}
+	temp2 = (UserList*)malloc(sizeof(UserList));
 	
-	userList.next = temp;
-	temp->prev = &userList;
+	temp2->clientSocket = sock;
+	temp2->connectFlag = 1;
 	
+	temp2->next = temp1->next;
+	temp1->next = temp2;
+	temp2->prev = temp1;
 
-	return;
+	return TRUE;
 }
 
 
-int delNickName(char* nick) {
-	UserList* temp;
-	temp = userList.next;
-	while (temp != NULL) { // 삭제하려는 닉네임이 있으면
-		if (!strncmp(temp->Nick, nick, strlen(nick))) {
+BOOL delUser(SOCKET sock) {
+	UserList *temp;
+
+	temp = userListHeader;
+
+	while (temp->next != NULL) { // 삭제하려는 닉네임이 있으면
+		if (temp->next->clientSocket == sock) {
 			temp->prev->next = temp->next;
 			if (temp->next != NULL) {
 				temp->next->prev = temp->prev;

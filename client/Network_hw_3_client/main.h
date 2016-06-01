@@ -13,6 +13,7 @@ extern WSADATA wsa_data;
 extern SOCKET serverSocket;
 
 extern UserList userList;
+extern UserList* userListHeader;
 extern setupInfo setup;
 
 extern HANDLE hMainRecv;
