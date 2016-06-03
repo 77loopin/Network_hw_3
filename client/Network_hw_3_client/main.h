@@ -17,3 +17,4 @@ extern UserList* userListHeader;
 extern setupInfo setup;
 
 extern HANDLE hMainRecv;
+extern HANDLE hMainThread;

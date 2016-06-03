@@ -19,6 +19,7 @@ UserList userList;
 setupInfo setup;
 SOCKET serverSocket;
 FD_SET fdSet;
+HANDLE hMainRecv;
 
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
@@ -58,14 +59,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		err_quit("listen()");
 	}
 
-	SOCKADDR_IN clientInfo;
-	int clientInfoSize = sizeof(clientInfo);
-	SOCKET client = accept(serverSocket, (SOCKADDR*)&clientInfo, &clientInfoSize);
-	while (1) {
-		printf("running\n");
-		Sleep(3);
-	}
-	
+	hMainRecv = NULL;
+	while ( hMainRecv == NULL) 
+		hMainRecv =(HANDLE)_beginthreadex(NULL, 0, MainReceiver, NULL, 0, NULL);
+
+	retval = WaitForSingleObject(hMainRecv, INFINITE);
+
 	// run accept thread
 	//_beginthreadex(NULL, 0, AcceptReceiver, NULL, 0, NULL);
 

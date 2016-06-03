@@ -1,90 +1,31 @@
 #include "sock_func.h"
 
 
-/*
-UINT WINAPI MainReceiver(LPVOID arg) {
-	BOOL sock_option;
-	SOCKET sock;
-	msgData msg;
-	msgHeader header;
-	char nickname[MAXNICK + 1];
-	struct tm *timeinfo;
-	int connectFlag;
-
-	while (1) {
-		recv(sock, (char*)&header, sizeof(header), 0);
-		timeinfo = gettime();
-		EnterCriticalSection(&cs);
-		connectFlag = setup.connectFlag;
-		LeaveCriticalSection(&cs);
-		if (connectFlag == 1) { // 채팅방 미 접속 상태
-			switch (header.flag) {
-			case 1: // chatting room accept
-				recv(sock, nickname, header.size, 0); // nickname
-				EnterCriticalSection(&cs);
-				setup.connectFlag = 2;
-				strncpy(setup.myNick,nickname, header.size);
-				strncpy(userList.Nick, setup.myNick, header.size);
-				LeaveCriticalSection(&cs);
-				MessageBox(NULL,"반갑습니다.\n\n채팅방에 접속했습니다.\n\n","채팅방 접속 성공",MB_ICONINFORMATION);
-				break;
-			case 2: // chatting room deny
-				MessageBox(NULL, "채팅방에 이미 존재하는 닉네임입니다.\n\n닉네임을 변경하세요.\n\n[설정] -> [닉네임 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
-				break;
-			case 3: // server deny
-				MessageBox(NULL, "더 이상 채팅방에 접속할 수 없습니다.\n\n다른 서버를 이용해주세요.\n\n[설정] -> [접속 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
-				// 일단 보류
-				break;
-			}
-		}
-		else if (connectFlag == 2) { // 채팅방 접속 상태
-			switch (header.flag) {
-			case 1:
-				recv(sock, nickname, header.size, 0); // nickname
-				EnterCriticalSection(&cs);
-				strncpy(setup.myNick, nickname, header.size);
-				strncpy(userList.Nick, setup.myNick, header.size);
-				LeaveCriticalSection(&cs);
-				MessageBox(NULL, "닉네임이 변경되었습니다.", "닉네임 변경", MB_ICONINFORMATION);
-				break;
-			case 2:
-				MessageBox(NULL, "채팅방에 이미 존재하는 닉네임입니다.", "닉네임 변경 실패", MB_ICONERROR);
-				break;
-			case 4: // chatting room user list add
-				recv(sock, nickname, header.size, 0); // nickname
-				//addNickName(nickname);
-				break;
-			case 5: // chatting room user list remove
-				recv(sock, nickname, header.size, 0); // nickname
-				//delNickName(nickname);
-				break;
-			case 6:
-				recv(sock, (char*)&msg, header.size, 0);
-				//DisplayText("[%02d:%02d | %s -> %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, msg.nick, setup.myNick, msg.msg);
-				break;
-			case 7:
-				recv(sock, (char*)&msg, header.size, 0); // message
-				//DisplayText("[%02d:%02d | %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, msg.nick, msg.msg);
-				break;
-			}
-		}
-	}
-	return 0;
-}
-*/
 
 UINT WINAPI MsgSender(LPVOID arg) {
 	int sendSize = 0;
 	senderArgument* ar = (senderArgument*)arg;
 	msgHeader header;
+	char ms[1000];
+	int retval;
 	header.flag = ar->flag;
 	header.size = ar->size;
+	retval = send(ar->sock, (char*)&header, sizeof(header), 0);
+	if (retval == SOCKET_ERROR) {
+		MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
+		return retval;
+	}
+	sendSize = retval;
+	if (ar->size != 0) {
+		//sprintf(ms, "flag : %d\nsize : %d\nNick : %s\nData : %s\n", ar->flag, ar->size, ((msgData*)ar->Data)->nick, ((msgData*)ar->Data)->msg); MessageBox(NULL, ms, "test", MB_OK);
+		retval = send(ar->sock, ar->Data, ar->size, 0);
+		if (retval == SOCKET_ERROR) {
+			MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
+			return retval;
+		}
+	}
 
-	sendSize = send(ar->sock, (char*)&header, sizeof(header), 0);
-	if (ar->size != 0)
-		sendSize = sendSize + send(ar->sock, ar->Data, ar->size, 0);
-
-	return sendSize;
+	return sendSize + retval;
 }
 
 
@@ -94,22 +35,29 @@ UINT WINAPI MsgSender(LPVOID arg) {
 UINT WINAPI MainReceiver(LPVOID arg) {
 	SOCKET clientSocket;
 	SOCKADDR_IN clientInfo;
+	msgHeader header;
 	UserList* temp;
 	FD_SET fdSet;
+	senderArgument argument;
+	msgData msg;
+	char nick[MAXNICK + 1];
+	char message[MAXMSG + 1];
 	int size = sizeof(clientInfo);
 	int retval;
+	char ms[500]; // test용
 
 	while (1) {
 		FD_ZERO(&fdSet);
 		FD_SET(serverSocket, &fdSet); // accept listener FD_SET
-		temp = userListHeader;
-		
+
+		temp = userListHeader->next;
+
 		while (temp != NULL) {
 			FD_SET(temp->clientSocket, &fdSet); // client socket listencer
 			temp = temp->next;
 		}
 
-		retval = select(0,&fdSet, NULL, NULL, NULL);
+		retval = select(0, &fdSet, NULL, NULL, NULL);
 		if (retval == SOCKET_ERROR) {
 			err_MB("select()");
 			break;
@@ -122,25 +70,65 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 				err_MB("accept()");
 			}
 			else {
-				// 접속 상태 window에 출력
+				addUser(clientSocket);
 			}
-			
 		}
 
-		
-		
-		
-	}
+		temp = userListHeader->next;
 
+		while (temp != NULL) {
+			//sprintf(ms, "check fd = %d", temp->clientSocket); MessageBox(NULL, ms, "test", MB_OK);
+			if (FD_ISSET(temp->clientSocket, &fdSet)) {
+				retval = recv(temp->clientSocket, (char*)&header, sizeof(header), 0);
+				if (retval == SOCKET_ERROR || retval == 0) {
+					UserList* t;
+					t = temp;
+					temp = temp->next;
+					strncpy(nick, t->Nick, strlen(t->Nick) + 1);
+					sendToAllClient(t->clientSocket, 5, strlen(nick) + 1, nick);
+					delUser(t);
+					continue;
+				}
+				switch (header.flag) {
+				case 1: // 채팅방 접속 시 닉네임 설정
+				case 2: // 채팅방에서 닉네임 변경 시
+					retval = recv(temp->clientSocket, nick, header.size, 0);
+					if (retval == SOCKET_ERROR || retval == 0) {
+						return 0;
+					}
+					if (checkNick(nick)) {
+						strncpy(temp->Nick, nick, strlen(nick) + 1);
+						temp->connectFlag = 2;
+						//sprintf(ms, "Send to client\nData : %s\n", nick); MessageBox(NULL, ms, "test", MB_OK);
+						sendToClient(temp->clientSocket, 1, strlen(nick) + 1, nick);
+						sendToAllClient(temp->clientSocket, 4, strlen(nick) + 1, nick);
+						// sent to all client user list update
+					}
+					else {
+						//sprintf(ms, "Send to client\nDeny Nickname"); MessageBox(NULL, ms, "test", MB_OK);
+						sendToClient(temp->clientSocket, 2, 0, NULL);
+						// send to client deny message flag 2
+					}
+					break;
+				case 4:
+					retval = recv(temp->clientSocket, (char*)&msg, header.size, 0);
+					//sprintf(ms, "Nick : %s\nData : %s\n", msg.nick, msg.msg); MessageBox(NULL, ms, "test", MB_OK);
+					if (retval == SOCKET_ERROR || retval == 0) {
+						return 0;
+					}
+					sendToAllClient(temp->clientSocket, 7, sizeof(msgData), (char*)&msg);
+					break;
+				case 5:
+					// send to client whisper message
+					break;
+				}
+			}
+			temp = temp->next;
+		}
+	}
 	return 0;
 }
 
-UINT WINAPI MainRecv(LPVOID arg) {
-	int retval;
-
-	
-	
-}
 
 SOCKET getConnection(char* ip, int port) {
 	int retval;
@@ -199,10 +187,29 @@ BOOL addUser(SOCKET sock) {
 }
 
 
-BOOL delUser(SOCKET sock) {
-	UserList *temp;
+BOOL checkNick(char* nick) {
+	UserList *temp1, *temp2;
 
-	temp = userListHeader;
+	temp1 = userListHeader->next;
+
+	while (temp1 != NULL) {
+		if (!strncmp(temp1->Nick, nick, strlen(nick))) {
+			return FALSE;
+		}
+		temp1 = temp1->next;
+	}
+
+	if (temp1 != NULL) {
+		return FALSE;
+	}
+	return TRUE;
+}
+
+
+BOOL delUser(UserList* user) {
+	
+	/*
+	temp = userListHeader
 
 	while (temp->next != NULL) { // 삭제하려는 닉네임이 있으면
 		if (temp->next->clientSocket == sock) {
@@ -214,10 +221,14 @@ BOOL delUser(SOCKET sock) {
 		}
 		temp = temp->next;
 	}
+	*/
 
-	if (temp == NULL) // 삭제하려고하는 닉네임이 없으면
-		return -1;
-	free(temp);
+	user->prev->next = user->next;
+	if (user->next != NULL) {
+		user->next->prev = user->prev;
+	}
+	closesocket(user->clientSocket);
+	free(user);
 	return 0;
 }
 
@@ -227,10 +238,10 @@ BOOL delUser(SOCKET sock) {
 // 보내는 메시지 크기(size)
 // 보내는 메시지 데이터(Data)를 입력 받아
 // 상대에게 데이터를 보내는 함수
-int sendToServer(SOCKET sock, int flag, int size, char* Data) {
+int sendToClient(SOCKET sock, int flag, int size, char* Data) {
 	static HANDLE hSender;
-	senderArgument arg;
-	arg.Data = Data;
+	static senderArgument arg;
+	memcpy(arg.Data,Data,size);
 	arg.size = size;
 	arg.flag = flag;
 	arg.sock = sock;
@@ -239,6 +250,28 @@ int sendToServer(SOCKET sock, int flag, int size, char* Data) {
 		hSender = (HANDLE)_beginthreadex(NULL, 0, MsgSender, &arg, 0, NULL);
 	}
 	//_endthreadex((UINT)hSender);
+	return size + sizeof(msgHeader);
+}
+
+int sendToAllClient(SOCKET sock, int flag, int size, char*  Data) {
+	UserList* temp;
+	static HANDLE hSender;
+	static senderArgument arg;
+	memcpy(arg.Data, Data, size);
+	arg.size = size;
+	arg.flag = flag;
+	
+	temp = userListHeader->next;
+	while (temp != NULL) {
+		if (temp->clientSocket != sock) {
+			arg.sock = temp->clientSocket;
+			hSender = NULL;
+			while (hSender == NULL) {
+				hSender = (HANDLE)_beginthreadex(NULL, 0, MsgSender, &arg, 0, NULL);
+			}
+		}
+		temp = temp->next;
+	}
 	return size + sizeof(msgHeader);
 }
 

@@ -24,7 +24,7 @@ typedef struct SENDERARG {
 	SOCKET sock;
 	int flag;
 	int size;
-	char* Data;
+	char Data[MAXMSG+1];
 } senderArgument;
 
 typedef struct USERLIST {

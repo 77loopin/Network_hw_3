@@ -15,3 +15,7 @@ extern HWND hEdit2;
 extern HWND hEdit3;
 
 extern HWND hMenu;
+
+extern HWND hMainDlg;
+extern HWND hSetupDlg;
+extern HWND hNickDlg;

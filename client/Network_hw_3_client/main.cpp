@@ -19,6 +19,7 @@ UserList userList;
 UserList* userListHeader = NULL;
 
 
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	int i;
 	// Store instance
@@ -32,6 +33,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 
 	memset(&userList, 0, sizeof(userList));
+	userListHeader = &userList;
 
 
 	// run DialogBox
@@ -43,4 +45,5 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	WSACleanup();
 	return 0;
 }
+
 
