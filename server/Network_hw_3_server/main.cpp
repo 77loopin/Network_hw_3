@@ -20,6 +20,10 @@ setupInfo setup;
 SOCKET serverSocket;
 FD_SET fdSet;
 HANDLE hMainRecv;
+HANDLE hSender;
+HANDLE hSendEvent;
+HANDLE hSendOverEvent;
+senderArgument sendArgument;
 
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
@@ -35,6 +39,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
 		err_quit("WSAStartup()");
 	}
+
+	hSendEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+	if (hSendEvent == NULL) err_quit("CreateEvent()");
+
+	hSendOverEvent = CreateEvent(NULL, FALSE, TRUE, NULL);
+	if (hSendOverEvent == NULL) err_quit("CreateEvent()");
 
 	memset(&userList, 0, sizeof(userList));
 	memset(&serverInfo, 0, sizeof(serverInfo));
@@ -59,9 +69,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		err_quit("listen()");
 	}
 
-	hMainRecv = NULL;
-	while ( hMainRecv == NULL) 
-		hMainRecv =(HANDLE)_beginthreadex(NULL, 0, MainReceiver, NULL, 0, NULL);
+	hMainRecv =(HANDLE)_beginthreadex(NULL, 0, MainReceiver, NULL, 0, NULL);
+	if (hMainRecv == NULL) {
+		MessageBox(NULL, "스레드 생성 실패.\n\n프로그램 종료.\n\n", "오류", MB_ICONERROR);
+	}
+	hSender = (HANDLE)_beginthreadex(NULL, 0, MsgSender, NULL, 0, NULL);
+	if (hSender == NULL) {
+		MessageBox(NULL, "스레드 생성 실패.\n\n프로그램 종료.\n\n", "오류", MB_ICONERROR);
+	}
 
 	retval = WaitForSingleObject(hMainRecv, INFINITE);
 

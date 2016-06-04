@@ -15,16 +15,11 @@ typedef struct MESSAGE {
 	char msg[MAXMSG+1];
 } msgData;
 
-typedef struct PACKETDATA {
-	msgHeader header;
-	msgData data;
-} packetData;
-
 typedef struct SENDERARG {
 	SOCKET sock;
 	int flag;
 	int size;
-	char Data[MAXMSG+1];
+	char Data[MAXMSG+1+MAXNICK+1];
 } senderArgument;
 
 typedef struct USERLIST {

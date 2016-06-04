@@ -12,8 +12,12 @@ extern WSADATA wsa_data;
 
 extern UserList userList;
 extern setupInfo setup;
+extern senderArgument sendArgument;
 extern SOCKET serverSocket;
 extern UserList* userListHeader;
 extern FD_SET fdSet;
 
 extern HANDLE hMainRecv;
+extern HANDLE hSender;
+extern HANDLE hSendEvent;
+extern HANDLE hSendOverEvent;

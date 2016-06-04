@@ -1,126 +1,153 @@
 #include "sock_func.h"
 
-HANDLE hMainRecv;
 
 UINT WINAPI MainThread(LPVOID arg) {
+
 	SOCKET tempSocket;
 	int retval;
 
-	//MessageBox(NULL, "서버와 연결중입니다.", "접속중", MB_ICONINFORMATION);
 	tempSocket = getConnection(setup.serverIP, setup.serverPort);
+
 	if (tempSocket == -1) {
 		MessageBox(NULL, "서버와의 연결에 실패했습니다.\n\n프로그램을 종료합니다.\n\n", "서버 연결 실패", MB_ICONERROR);
-		EndDialog(hMainDlg, 0);
+		exit(-1);
 		return 0;
 	}
-	
+
 	setup.connectFlag = 1;
 	serverSocket = tempSocket;
-	
+
 	hMainRecv = (HANDLE)_beginthreadex(NULL, 0, MainReceiver, NULL, 0, NULL);
 	if (hMainRecv == NULL) {
 		MessageBox(NULL, "클라이언트 시작을 실패했습니다.\n프로그램을 종료합니다.", "스레드 생성 실패", MB_ICONERROR);
-		exit(0);
-	}
-	
-	MessageBox(NULL, "서버와 접속되었습니다.\n\n", "", MB_OK);
-	retval = WaitForSingleObject( hMainRecv, INFINITE);
-	
-	if (retval == 0) {
-		TerminateThread(hMainRecv, 1);
-	}
-	CloseHandle(hMainRecv);
-	
-	if (setup.connectFlag == 2) {
-		MessageBox(NULL, "서버가 접속을 끊었습니다.\n프로그램을 종료합니다.\n", "서버 오류", MB_ICONERROR);
-		closesocket(serverSocket);
+		exit(-1);
 	}
 
+	hSender = (HANDLE)_beginthreadex(NULL, 0, MsgSender, NULL, 0, NULL);
+	if (hSender == NULL) {
+		MessageBox(NULL, "클라이언트 시작을 실패했습니다.\n프로그램을 종료합니다.", "스레드 생성 실패", MB_ICONERROR);
+		exit(-1);
+	}
+
+	MessageBox(NULL, "서버와 접속되었습니다.\n\n", "", MB_OK);
+	HANDLE hThread[2];
+	hThread[0] = hMainRecv;
+	hThread[1] = hSender;
+	retval = WaitForMultipleObjects(2, hThread, TRUE, INFINITE);
+
+	retval -= WAIT_OBJECT_0;
+	if (retval == 0)
+		TerminateThread(hSender, 1);
+	else
+		TerminateThread(hMainRecv, 1);
+
+	CloseHandle(hMainRecv);
+	CloseHandle(hSender);
+	if (setup.connectFlag == 2) {
+		MessageBox(NULL, "서버가 접속을 끊었습니다", "알림", MB_ICONINFORMATION);
+		closesocket(serverSocket);
+	}
+	
 	return 0;
 }
+
 
 UINT WINAPI MainReceiver(LPVOID arg) {
 	BOOL sock_option;
 	SOCKET sock;
 	msgData msg;
 	msgHeader header;
+	UserList* temp;
 	char nickname[MAXNICK + 1];
 	struct tm *timeinfo;
 	int connectFlag;
 	int retval;
+	char ms[1000];
 
 	while (1) {
 		retval = recv(serverSocket, (char*)&header, sizeof(header), 0);
+		//sprintf(ms, "%d process\n\nflag : %d\nsize : %d\n",getpid(),header.flag,header.size); MessageBox(NULL, ms, "test", MB_OK);
 		if (retval == SOCKET_ERROR || retval == 0) {
 			return 0;
 		}
 		timeinfo = gettime();
-		EnterCriticalSection(&cs);
-		connectFlag = setup.connectFlag;
-		LeaveCriticalSection(&cs);
-		if (connectFlag == 1) { // 채팅방 미 접속 상태
+		if (setup.connectFlag == 1) { // 채팅방 미 접속 상태
 			switch (header.flag) {
-			case 1: // chatting room accept
+			case 4: // 채팅방 접속 허가
 				retval = recv(serverSocket, nickname, header.size, 0); // nickname
 				if (retval == SOCKET_ERROR || retval == 0 )
 					return 0;
-				EnterCriticalSection(&cs);
 				setup.connectFlag = 2;
 				strncpy(setup.myNick,nickname, header.size);
 				strncpy(userList.Nick, setup.myNick, header.size);
-				LeaveCriticalSection(&cs);
+				delAllUser(); // 접속자 목록 초기화
 				MessageBox(NULL,"반갑습니다.\n\n채팅방에 접속했습니다.\n\n","채팅방 접속 성공",MB_ICONINFORMATION);
 				break;
-			case 2: // chatting room deny
+			case 5: // chatting room deny
 				MessageBox(NULL, "채팅방에 이미 존재하는 닉네임입니다.\n\n닉네임을 변경하세요.\n\n[설정] -> [닉네임 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
 				break;
-			case 3: // server deny
+			case 0: // server deny
 				MessageBox(NULL, "더 이상 채팅방에 접속할 수 없습니다.\n\n다른 서버를 이용해주세요.\n\n[설정] -> [접속 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
 				// 일단 보류
 				break;
 			}
 		}
-		else if (connectFlag == 2) { // 채팅방 접속 상태
+		else if (setup.connectFlag == 2) { // 채팅방 접속 상태
 			switch (header.flag) {
-			case 1:
-				retval = recv(serverSocket, nickname, header.size, 0); // nickname
-				if (retval == SOCKET_ERROR || retval == 0)
-					return 0;
-				EnterCriticalSection(&cs);
-				DisplayText("[%02d:%02d | info] : %s님이 %s로 닉네임을 변경했습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, setup.myNick,nickname);
-				strncpy(setup.myNick, nickname, header.size);
-				strncpy(userList.Nick, setup.myNick, header.size);
-				LeaveCriticalSection(&cs);
-				MessageBox(NULL, "닉네임이 변경되었습니다.", "닉네임 변경", MB_ICONINFORMATION);
-				break;
-			case 2:
-				MessageBox(NULL, "채팅방에 이미 존재하는 닉네임입니다.", "닉네임 변경 실패", MB_ICONERROR);
-				break;
-			case 4: // chatting room user list add
+			case 1: // chatting room user list add
 				retval = recv(serverSocket, nickname, header.size, 0); // nickname
 				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
 				DisplayText("[%02d:%02d | info] : %s님이 접속하셨습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, nickname);
 				addUser(nickname);
 				break;
-			case 5: // chatting room user list remove
+			case 2: // chatting room user list remove
 				retval = recv(serverSocket, nickname, header.size, 0); // nickname
 				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
 				DisplayText("[%02d:%02d | info] : %s님이 퇴장하셨습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, nickname);
 				delUser(nickname);
 				break;
-			case 6:
-				retval = recv(serverSocket, (char*)&msg, header.size, 0);
-				if (retval == SOCKET_ERROR || retval == 0)	
+
+			case 3: // 닉네임 변경 내용
+				retval = recv(serverSocket, (char*)&msg, header.size, 0); // nickname
+				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
-				DisplayText("[%02d:%02d | %s -> %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, msg.nick, setup.myNick, msg.msg);
+				DisplayText("[%02d:%02d | info] : %s님이 %s로 닉네임을 변경했습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, msg.msg,msg.nick);
+				temp = searchNick(msg.nick);
+				if (temp != NULL) {
+					strncpy(temp->Nick, msg.msg, strlen(msg.msg) + 1);
+				}
 				break;
-			case 7:
+			case 4: // 닉네임 변경 허가
+				retval = recv(serverSocket, nickname, header.size, 0); // nickname
+				if (retval == SOCKET_ERROR || retval == 0)
+					return 0;
+				setup.connectFlag = 2;
+				DisplayText("[%02d:%02d | info] : %s님이 %s로 닉네임을 변경했습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, setup.myNick, nickname);
+				strncpy(setup.myNick, nickname, header.size);
+				strncpy(userList.Nick, setup.myNick, header.size);
+				break;
+			case 5:
+				MessageBox(NULL, "채팅방에 이미 존재하는 닉네임입니다.\n\n닉네임을 변경하세요.\n\n[설정] -> [닉네임 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
+				break;
+			case 6:
 				retval = recv(serverSocket, (char*)&msg, header.size, 0); // message
 				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
 				DisplayText("[%02d:%02d | %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, msg.nick, msg.msg);
+				break;
+			case 7:
+				retval = recv(serverSocket, (char*)&msg, header.size, 0);
+				if (retval == SOCKET_ERROR || retval == 0)	
+					return 0;
+				DisplayText("[%02d:%02d | 귓속말 %s -> %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, msg.nick, setup.myNick, msg.msg);
+				break;
+			case 8: // 최초 접속 시 현재 접속자 정보 가져오기
+				retval = recv(serverSocket, nickname, header.size, 0); // nickname
+				if (retval == SOCKET_ERROR || retval == 0)
+					return 0;
+				addUser(nickname);
 				break;
 			}
 		}
@@ -128,29 +155,36 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 	return 0;
 }
 
-
 UINT WINAPI MsgSender(LPVOID arg) {
-	int sendSize = 0;
-	int retval;
-	senderArgument* ar = (senderArgument*)arg;
 	msgHeader header;
-	header.flag = ar->flag;
-	header.size = ar->size;
-	retval = send(ar->sock, (char*)&header, sizeof(header), 0);
-	if (retval == SOCKET_ERROR) {
-		MessageBox(NULL, "메시지 전송에 실패했습니다.\n다시 시도해주세요.\n", "오류", MB_ICONERROR);
-		return 0;
-	}
-	sendSize = retval;
-	if (ar->size != 0){
-		retval = send(ar->sock, ar->Data, ar->size, 0);
+	int retval;
+
+	while (1) {
+		WaitForSingleObject(hSendEvent, INFINITE);
+
+		header.flag = sendArgument.flag;
+		header.size = sendArgument.size;
+		//sprintf(ms, "flag : %d\nsize : %d\n",header.flag,header.size); MessageBox(NULL, ms, "test", MB_OK);
+
+		retval = send(sendArgument.sock, (char*)&header, sizeof(header), 0);
+
 		if (retval == SOCKET_ERROR) {
-			MessageBox(NULL, "메시지 전송에 실패했습니다.\n다시 시도해주세요.\n", "오류", MB_ICONERROR);
-			return 0;
+			//MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
+			break;
 		}
-		sendSize = sendSize + retval;
+
+		if (header.size != 0) {
+			retval = send(sendArgument.sock, (char*)sendArgument.Data, header.size, 0);
+			if (retval == SOCKET_ERROR) {
+				//	MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
+				break;
+			}
+		}
+
+		SetEvent(hSendOverEvent);
 	}
-	return sendSize;
+
+	return retval;
 }
 
 
@@ -186,23 +220,22 @@ SOCKET getConnection(char* ip, int port) {
 	return sock;
 }
 
+BOOL addUser(char* nick) {
+	UserList* temp;
+	UserList* ptr = userListHeader;
+	
+	temp = (UserList*)malloc(sizeof(UserList));
 
-void addUser(char* nick) {
-	UserList *temp1, *temp2;
-
-	temp1 = userListHeader;
-	while (temp1->next != NULL) {
-		temp1 = temp1->next;
+	while (ptr->next != NULL) {
+		ptr = ptr->next;
 	}
 
-	// 없으면
-	temp2 = (UserList*)malloc(sizeof(UserList));
-	strncpy(temp2->Nick, nick, strlen(nick) + 1);
+	ptr->next = temp;
+	temp->prev = ptr;
+	temp->next = NULL;
+	strncpy(temp->Nick, nick, strlen(nick) + 1);
 
-	temp2->next = temp1->next;
-	temp1->next = temp2;
-	temp2->prev = temp1;
-	return;
+	return TRUE;
 }
 
 
@@ -210,7 +243,7 @@ int delUser(char* nick) {
 	UserList *temp;
 	temp = userListHeader->next;
 	while (temp != NULL) { // 삭제하려는 닉네임이 있으면
-		if (!strncmp(temp->Nick, nick, strlen(nick))) {
+		if (!strcmp(temp->Nick, nick)) {
 			temp->prev->next = temp->next;
 			if (temp->next != NULL) {
 				temp->next->prev = temp->prev;
@@ -219,24 +252,38 @@ int delUser(char* nick) {
 		}
 		temp = temp->next;
 	}
-	if (temp == NULL) // 삭제하려고하는 닉네임이 없으면
-		return -1;
 	
 	free(temp);
 	return 0;
 }
 
+
 int delAllUser() {
-	// 채팅방 접속자 목록 지우기
-	UserList *temp1, *temp2;
-	temp1 = userList.next;
-	while (temp1 != NULL) {
-		temp2 = temp1;
-		temp1 = temp1->next;
-		free(temp2);
+	// 채팅방 모든 접속자 목록 지우기 ( 초기화 )
+	UserList *temp;
+	while (userListHeader->next != NULL) {
+		temp = userListHeader->next;
+		userListHeader->next = temp->next;
+		free(temp);
 	}
-	userList.next = NULL;
+	
 	return 0;
+}
+
+
+UserList* searchNick(char* nick) {
+	UserList *temp;
+
+	temp = userListHeader->next;
+
+	while (temp != NULL) {
+		if (!strcmp(temp->Nick, nick)) {
+			return temp;
+		}
+		temp = temp->next;
+	}
+
+	return temp; // 노드가 없으면
 }
 
 
@@ -246,17 +293,17 @@ int delAllUser() {
 // 보내는 메시지 데이터(Data)를 입력 받아
 // 상대에게 데이터를 보내는 함수
 int sendToServer(SOCKET sock, int flag, int size, char* Data) {
-	static HANDLE hSender;
-	static senderArgument arg;
-	memcpy(arg.Data,Data,size);
-	arg.size = size;
-	arg.flag = flag;
-	arg.sock = sock;
-	hSender = NULL;
-	while (hSender == NULL) {
-		hSender = (HANDLE)_beginthreadex(NULL, 0, MsgSender, &arg, 0, NULL);
-	}
-	//_endthreadex((UINT)hSender);
+
+	WaitForSingleObject(hSendOverEvent, INFINITE);
+
+	memcpy(&sendArgument.Data, Data, size);
+	sendArgument.sock = sock;
+	sendArgument.flag = flag;
+	sendArgument.size = size;
+
+	SetEvent(hSendEvent);
+
+
 	return size + sizeof(msgHeader);
 }
 

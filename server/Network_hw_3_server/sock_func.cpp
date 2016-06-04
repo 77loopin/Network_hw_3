@@ -3,29 +3,35 @@
 
 
 UINT WINAPI MsgSender(LPVOID arg) {
-	int sendSize = 0;
-	senderArgument* ar = (senderArgument*)arg;
 	msgHeader header;
-	char ms[1000];
 	int retval;
-	header.flag = ar->flag;
-	header.size = ar->size;
-	retval = send(ar->sock, (char*)&header, sizeof(header), 0);
-	if (retval == SOCKET_ERROR) {
-		MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
-		return retval;
-	}
-	sendSize = retval;
-	if (ar->size != 0) {
-		//sprintf(ms, "flag : %d\nsize : %d\nNick : %s\nData : %s\n", ar->flag, ar->size, ((msgData*)ar->Data)->nick, ((msgData*)ar->Data)->msg); MessageBox(NULL, ms, "test", MB_OK);
-		retval = send(ar->sock, ar->Data, ar->size, 0);
+
+	while (1) {
+		WaitForSingleObject(hSendEvent, INFINITE);
+		
+		header.flag = sendArgument.flag;
+		header.size = sendArgument.size;
+		//sprintf(ms, "flag : %d\nsize : %d\n",header.flag,header.size); MessageBox(NULL, ms, "test", MB_OK);
+
+		retval = send(sendArgument.sock, (char*)&header, sizeof(header), 0);
+
 		if (retval == SOCKET_ERROR) {
-			MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
-			return retval;
+			//MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
+			break;
 		}
+
+		if (header.size != 0) {
+			retval = send(sendArgument.sock, (char*)sendArgument.Data, header.size, 0);
+			if (retval == SOCKET_ERROR) {
+				//	MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
+				break;
+			}
+		}
+
+		SetEvent(hSendOverEvent);
 	}
 
-	return sendSize + retval;
+	return retval;
 }
 
 
@@ -37,6 +43,7 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 	SOCKADDR_IN clientInfo;
 	msgHeader header;
 	UserList* temp;
+	UserList* ptr;
 	FD_SET fdSet;
 	senderArgument argument;
 	msgData msg;
@@ -80,83 +87,90 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 			//sprintf(ms, "check fd = %d", temp->clientSocket); MessageBox(NULL, ms, "test", MB_OK);
 			if (FD_ISSET(temp->clientSocket, &fdSet)) {
 				retval = recv(temp->clientSocket, (char*)&header, sizeof(header), 0);
-				if (retval == SOCKET_ERROR || retval == 0) {
+				if (retval == SOCKET_ERROR || retval == 0) { // 클라이언트 접속 종료 시
 					UserList* t;
 					t = temp;
 					temp = temp->next;
-					strncpy(nick, t->Nick, strlen(t->Nick) + 1);
-					sendToAllClient(t->clientSocket, 5, strlen(nick) + 1, nick);
+					strncpy(nick, t->Nick, strlen(t->Nick) + 1); // 퇴장한 사용자 닉네임 확인
+					sendToAllClient(t->clientSocket, 2, strlen(nick) + 1, nick); // 퇴장 여부 알림
 					delUser(t);
 					continue;
 				}
 				switch (header.flag) {
 				case 1: // 채팅방 접속 시 닉네임 설정
+					retval = recv(temp->clientSocket, nick, header.size, 0);
+					if (retval == SOCKET_ERROR || retval == 0) {
+						return 0;
+					}
+					if (searchNick(nick) == NULL) { // 닉네임 사용 가능
+						strncpy(temp->Nick, nick, strlen(nick) + 1);
+						temp->connectFlag = 2;
+						//sprintf(ms, "Send to client\nData : %s\n", nick); MessageBox(NULL, ms, "test", MB_OK);
+						sendToClient(temp->clientSocket, 4, strlen(nick) + 1, nick); // 닉네임 허가
+						sendToAllClient(temp->clientSocket, 1, strlen(nick) + 1, nick); // 다른 사용자에게 새로운 접속자 알림
+						ptr = userListHeader->next;
+						while (ptr != NULL) {
+							if (strcmp(ptr->Nick, temp->Nick)) {
+								sendToClient(temp->clientSocket, 8, strlen(ptr->Nick) + 1, ptr->Nick);
+							}
+							ptr = ptr->next;
+						}
+					}
+					else {  // 접속 거부
+						//sprintf(ms, "Send to client\nDeny Nickname"); MessageBox(NULL, ms, "test", MB_OK);
+						sendToClient(temp->clientSocket, 5, 0, NULL); // 닉네임 설정 거부
+					}
+					break;
 				case 2: // 채팅방에서 닉네임 변경 시
 					retval = recv(temp->clientSocket, nick, header.size, 0);
 					if (retval == SOCKET_ERROR || retval == 0) {
 						return 0;
 					}
-					if (checkNick(nick)) {
-						strncpy(temp->Nick, nick, strlen(nick) + 1);
+					if (searchNick(nick) == NULL) { // 닉네임 사용 가능
+						strncpy(msg.msg, temp->Nick, strlen(temp->Nick) + 1); // 보낼 메시지 데이터 new nickname
+						strncpy(msg.nick, nick, strlen(nick) + 1); // old nickname
+
+						strncpy(temp->Nick, nick, strlen(nick) + 1); // nickname change
+
 						temp->connectFlag = 2;
 						//sprintf(ms, "Send to client\nData : %s\n", nick); MessageBox(NULL, ms, "test", MB_OK);
-						sendToClient(temp->clientSocket, 1, strlen(nick) + 1, nick);
-						sendToAllClient(temp->clientSocket, 4, strlen(nick) + 1, nick);
-						// sent to all client user list update
+						sendToClient(temp->clientSocket, 4, strlen(nick) + 1, nick); // 닉네임 허가
+						sendToAllClient(temp->clientSocket, 3, sizeof(msg), (char*)&msg); // 다른 사용자에게 닉네임 변경 알림
 					}
-					else {
+					else { // 변경 거부
 						//sprintf(ms, "Send to client\nDeny Nickname"); MessageBox(NULL, ms, "test", MB_OK);
-						sendToClient(temp->clientSocket, 2, 0, NULL);
-						// send to client deny message flag 2
+						sendToClient(temp->clientSocket, 5, 0, NULL); // 닉네임 변경 거부
 					}
 					break;
-				case 4:
+				case 4: // 전체 메시지
 					retval = recv(temp->clientSocket, (char*)&msg, header.size, 0);
 					//sprintf(ms, "Nick : %s\nData : %s\n", msg.nick, msg.msg); MessageBox(NULL, ms, "test", MB_OK);
 					if (retval == SOCKET_ERROR || retval == 0) {
 						return 0;
 					}
-					sendToAllClient(temp->clientSocket, 7, sizeof(msgData), (char*)&msg);
+					sendToAllClient(temp->clientSocket, 6, sizeof(msgData), (char*)&msg);
 					break;
-				case 5:
-					// send to client whisper message
-					break;
+				case 5: // 귓속말
+					retval = recv(temp->clientSocket, (char*)&msg, header.size, 0);
+					//sprintf(ms, "Nick : %s\nData : %s\n", msg.nick, msg.msg); MessageBox(NULL, ms, "test", MB_OK);
+					if (retval == SOCKET_ERROR || retval == 0) {
+						return 0;
+					}
+					ptr = userListHeader->next;
+					while (ptr != NULL) {
+						if (!strcmp(ptr->Nick,msg.nick)) {
+							break;
+						}
+					}
+					if (ptr != NULL) { // 없는 사용자에게 귓속말
+						sendToClient(ptr->clientSocket, 7, sizeof(msgData), (char*)&msg);
+					}
 				}
 			}
 			temp = temp->next;
 		}
 	}
 	return 0;
-}
-
-
-SOCKET getConnection(char* ip, int port) {
-	int retval;
-	SOCKET sock;
-	SOCKADDR_IN dest;
-
-	// init SOCKADDR
-	memset(&dest, 0, sizeof(dest));
-	dest.sin_family = AF_INET;
-	dest.sin_addr.s_addr = inet_addr(ip);
-	dest.sin_port = htons(port);
-	
-	sock = socket(AF_INET, SOCK_STREAM, 0);
-	
-	if (sock == INVALID_SOCKET) {
-		err_MB("socket()");
-		return -1;
-	}
-	
-	retval = connect(sock, (SOCKADDR*)&dest, sizeof(dest));
-
-	if (retval == SOCKET_ERROR) {
-		//display_MB("서버와의 연결에 실패했습니다.\n\n서버 설정을 다시 확인해주시기 바랍니다.\n\n");
-		//err_MB("connect()");
-		return -1;
-	}
-
-	return sock;
 }
 
 
@@ -170,7 +184,6 @@ BOOL addUser(SOCKET sock) {
 		if (temp1->next->clientSocket == sock) {
 			return FALSE;
 		}
-
 		temp1 = temp1->next;
 	}
 
@@ -186,43 +199,8 @@ BOOL addUser(SOCKET sock) {
 	return TRUE;
 }
 
-
-BOOL checkNick(char* nick) {
-	UserList *temp1, *temp2;
-
-	temp1 = userListHeader->next;
-
-	while (temp1 != NULL) {
-		if (!strncmp(temp1->Nick, nick, strlen(nick))) {
-			return FALSE;
-		}
-		temp1 = temp1->next;
-	}
-
-	if (temp1 != NULL) {
-		return FALSE;
-	}
-	return TRUE;
-}
-
-
 BOOL delUser(UserList* user) {
 	
-	/*
-	temp = userListHeader
-
-	while (temp->next != NULL) { // 삭제하려는 닉네임이 있으면
-		if (temp->next->clientSocket == sock) {
-			temp->prev->next = temp->next;
-			if (temp->next != NULL) {
-				temp->next->prev = temp->prev;
-			}
-			break;
-		}
-		temp = temp->next;
-	}
-	*/
-
 	user->prev->next = user->next;
 	if (user->next != NULL) {
 		user->next->prev = user->prev;
@@ -232,6 +210,21 @@ BOOL delUser(UserList* user) {
 	return 0;
 }
 
+UserList* searchNick(char* nick) {
+	UserList *temp;
+
+	temp = userListHeader->next;
+
+	while (temp != NULL) {
+		if (!strcmp(temp->Nick, nick)) {
+			return temp;
+		}
+		temp = temp->next;
+	}
+
+	return temp; // 노드가 없으면
+}
+
 
 // 보내려는 소켓(sock)
 // 보내는 메시지 종류(flag)
@@ -239,36 +232,29 @@ BOOL delUser(UserList* user) {
 // 보내는 메시지 데이터(Data)를 입력 받아
 // 상대에게 데이터를 보내는 함수
 int sendToClient(SOCKET sock, int flag, int size, char* Data) {
-	static HANDLE hSender;
-	static senderArgument arg;
-	memcpy(arg.Data,Data,size);
-	arg.size = size;
-	arg.flag = flag;
-	arg.sock = sock;
-	hSender = NULL;
-	while (hSender == NULL) {
-		hSender = (HANDLE)_beginthreadex(NULL, 0, MsgSender, &arg, 0, NULL);
-	}
-	//_endthreadex((UINT)hSender);
+	
+
+	WaitForSingleObject(hSendOverEvent, INFINITE);
+	
+	memcpy(&sendArgument.Data, Data, size);
+	sendArgument.sock = sock;
+	sendArgument.flag = flag;
+	sendArgument.size = size;
+	
+	SetEvent(hSendEvent);
+	
+
 	return size + sizeof(msgHeader);
 }
 
 int sendToAllClient(SOCKET sock, int flag, int size, char*  Data) {
+
 	UserList* temp;
-	static HANDLE hSender;
-	static senderArgument arg;
-	memcpy(arg.Data, Data, size);
-	arg.size = size;
-	arg.flag = flag;
 	
 	temp = userListHeader->next;
 	while (temp != NULL) {
 		if (temp->clientSocket != sock) {
-			arg.sock = temp->clientSocket;
-			hSender = NULL;
-			while (hSender == NULL) {
-				hSender = (HANDLE)_beginthreadex(NULL, 0, MsgSender, &arg, 0, NULL);
-			}
+			sendToClient(temp->clientSocket, flag, size, Data);
 		}
 		temp = temp->next;
 	}

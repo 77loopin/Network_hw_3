@@ -1,23 +1,5 @@
 #include "dlg_func.h"
 
-HWND hEdit1;
-HWND hEdit2;
-HWND hEdit3;
-
-HWND hMenu;
-
-HWND hIp;
-HWND hPort;
-HWND hNick;
-
-HANDLE hMainThread;
-
-setupInfo setup;
-
-HWND hMainDlg;
-HWND hSetupDlg;
-HWND hNickDlg;
-
 	
 BOOL CALLBACK main_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
@@ -30,11 +12,7 @@ BOOL CALLBACK main_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_INITDIALOG :
 		
-		setup.connectFlag = 0; // 미 접속 상태
-		
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG2), NULL, (DLGPROC)setup_DlgProc);
-
-		hMainDlg = hDlg; // MainDialog 핸들 전역변수로 저장
 		
 		hEdit1 = GetDlgItem(hDlg, IDC_EDIT1); // 메시지 출력창
 		hEdit2 = GetDlgItem(hDlg, IDC_EDIT2); // 메시지 입력창
@@ -88,6 +66,7 @@ BOOL CALLBACK main_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				strncpy(msg.nick, setup.myNick, strlen(setup.myNick) +1);
 				sendToServer(serverSocket, 4, sizeof(msgData), (char*)&msg); // 전체 메시지
 				DisplayText("[%02d:%02d | %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, setup.myNick, buf);
+				// 귓속말은 아직 구현중
 			}
 			
 			EnableWindow(hDlg, TRUE);
@@ -137,7 +116,6 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			GetDlgItemText(hDlg, IDC_IPADDRESS1, ip, iplen + 1); // IP를 입력 받음
 			GetDlgItemText(hDlg, IDC_EDIT1, port, 6); // Port를 입력 받음
 			tempPort = atoi(port);
-			//GetDlgItemText(hDlg, IDC_EDIT2, Nick, MAXNICK + 1); // 대화명을 입력 받음
 
 			if (!check_ip(ip, iplen)) {
 				MessageBox(hDlg, "유효한 IP가 아닙니다.\n서버 IP를 다시 확인해주세요.\n", "경고", MB_ICONERROR);
@@ -161,29 +139,23 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				return FALSE;
 			}
 
-			if (setup.connectFlag == 2) {
-				MessageBox(NULL, "새로운 서버와 접속을 시도합니다.\n\n새로운 서버 접속을 위해 기존 서버를 종료합니다.\n\n", "서버 변경", MB_ICONINFORMATION);
-				//setup.connectFlag = 0;
-				closesocket(serverSocket);
-			}
-
 			strncpy(setup.serverIP, ip, strlen(ip) + 1);
 			setup.serverPort = tempPort;
-			setup.connectFlag = 0;
-			
-			hMainThread = (HANDLE)_beginthreadex(NULL, 0, MainThread, NULL, 0, NULL);
+
+			if (setup.connectFlag == 2) {
+				MessageBox(hDlg, "새로운 서버와 접속합니다.\n기존 서버는 종료됩니다.\n", "알림", MB_ICONINFORMATION);
+				TerminateThread(hMainRecv, 1);
+				WaitForSingleObject(hMainThread, INFINITE);
+				setup.connectFlag = 0;
+			}
+
+			hMainThread = (HANDLE)_beginthreadex(NULL, 0, MainThread, NULL, 0, NULL); // Create Main Thread 
 			if (hMainThread == NULL) {
-				MessageBox(hDlg, "클라이언트 시작을 실패했습니다.\n프로그램을 종료합니다.", "스레드 생성 실패", MB_ICONERROR);
-				EndDialog(hMainDlg, IDOK);
-				return FALSE;
+				MessageBox(NULL, "클라이언트 시작을 실패했습니다.\n프로그램을 종료합니다.", "스레드 생성 실패", MB_ICONERROR);
 			}
 			
-			CloseHandle(hMainThread);
-			
 			EndDialog(hDlg, IDOK); // configuration dialog box finish
-
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG3), NULL, (DLGPROC)nickSetup_DlgProc);
-
 			return TRUE;
 		case IDCANCEL:
 			if (setup.connectFlag == 0) { // 최초 접속 시 setting값이 없으면 프로그램 강제 종료
@@ -201,6 +173,7 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	char newNick[MAXNICK + 1]; // 새로운 대화명을 저장하는 임시 변수
 	HWND hEdit;
+	msgData msg;
 	struct tm* timeinfo;
 
 	switch (uMsg) {
@@ -222,7 +195,19 @@ BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 				return FALSE;
 			}
 
-			sendToServer(serverSocket, 1, strlen(newNick)+1, newNick); // nickname 변경
+			if (setup.connectFlag == 0) {
+				MessageBox(hDlg, "서버를 설정을 하세요.\n\n[설정] -> [접속 설정]\n\n", "경고", MB_ICONERROR);
+				EndDialog(hDlg, IDCANCEL); // 대화상자 종료
+				return TRUE;
+			}
+
+			else if (setup.connectFlag == 1) {
+				sendToServer(serverSocket, 1, strlen(newNick) + 1, newNick); // nickname 설정
+			}
+
+			else if (setup.connectFlag == 2) {
+				sendToServer(serverSocket, 2, strlen(newNick) + 1, newNick); // nickname 변경
+			}
 
 			// 대화명을 변경 했다는 것을 화면에 출력
 			//MessageBox(hDlg, "닉네임을 변경했습니다.\n", "확인", MB_OK);

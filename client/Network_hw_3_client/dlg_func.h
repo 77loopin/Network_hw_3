@@ -9,13 +9,3 @@ void DisplayText(char *fmt, ...);
 BOOL check_ip(char*,int);
 BOOL check_port(char*);
 BOOL check_nick(char*);
-
-extern HWND hEdit1;
-extern HWND hEdit2;
-extern HWND hEdit3;
-
-extern HWND hMenu;
-
-extern HWND hMainDlg;
-extern HWND hSetupDlg;
-extern HWND hNickDlg;
