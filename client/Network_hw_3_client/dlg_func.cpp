@@ -4,28 +4,35 @@
 BOOL CALLBACK main_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 	static char buf[MAXMSG + 1];
+	static char nick[MAXNICK + 1];
+	UserList* ptr;
 	msgData msg;
 	struct tm* timeinfo;
 	BOOL retval;
-	
+	int index;
+	char ms[1000];
 
 	switch (uMsg) {
 	case WM_INITDIALOG :
-		
+
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG2), NULL, (DLGPROC)setup_DlgProc);
 		
 		hEdit1 = GetDlgItem(hDlg, IDC_EDIT1); // 메시지 출력창
 		hEdit2 = GetDlgItem(hDlg, IDC_EDIT2); // 메시지 입력창
-		hEdit3 = GetDlgItem(hDlg, IDC_EDIT3); // 사용자 현황 ( 수정 예정 )
+		hList = GetDlgItem(hDlg, IDC_LIST2); // 접속자 리스트
+		//hEdit3 = GetDlgItem(hDlg, IDC_EDIT3); // 사용자 현황 ( 수정 예정 )
 		hMenu = GetDlgItem(hDlg, IDR_MENU1);
 
 		/*
 		if (setup.connectFlag == 1) {
 			display_MB("닉네임이 설정해야합니다.\n\n메뉴에서 닉네임을 설정해주세요.\n\n");
-			EnableWindow(hEdit3, FALSE);
+			EnableWindow(
+			, FALSE);
 		}
 		*/
-		SendMessage(hEdit3, EM_SETLIMITTEXT, MAXMSG, 0);
+		SendMessage(hEdit2, EM_SETLIMITTEXT, MAXMSG, 0);
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)"전체 사용자");
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)userList.Nick);
 		
 		return TRUE;
 	case WM_COMMAND:
@@ -46,27 +53,38 @@ BOOL CALLBACK main_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			SendMessage(hEdit2, EM_SETSEL, 0, -1); // 입력창에 있는 문자열을 모두 선택 상태로 만든다.
 			SendMessage(hEdit2, EM_REPLACESEL, FALSE, (LPARAM)"");
 
-			if (setup.connectFlag == 0) {
+			if (setup.connectFlag == CONNECT_INIT) {
 				MessageBox(hDlg, "서버를 설정을 하세요.\n\n[설정] -> [접속 설정]\n\n", "경고", MB_ICONERROR);
 				EnableWindow(hDlg, TRUE);
 				SetFocus(hEdit2); // 입력 에디터 컨트롤에 다시 Focus시킨다.
 				return FALSE;
 			}
 
-			else if ( setup.connectFlag == 1 ) {
+			else if ( setup.connectFlag == CONNECT_SVR ) {
 				MessageBox(hDlg,"닉네임을 설정해서 채팅방에 접속하세요.\n\n[설정] -> [닉네임 설정]\n\n","경고",MB_ICONERROR);
 				EnableWindow(hDlg, TRUE);
 				SetFocus(hEdit2); // 입력 에디터 컨트롤에 다시 Focus시킨다.
 				return FALSE;
 			}
 
-			else if ( setup.connectFlag == 2 ) {
+			else if ( setup.connectFlag == CONNECT_CHAT ) {
 
 				strncpy(msg.msg, buf, strlen(buf) + 1);
 				strncpy(msg.nick, setup.myNick, strlen(setup.myNick) +1);
-				sendToServer(serverSocket, 4, sizeof(msgData), (char*)&msg); // 전체 메시지
-				DisplayText("[%02d:%02d | %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, setup.myNick, buf);
-				// 귓속말은 아직 구현중
+				index = SendMessage(hList, LB_GETCURSEL, 0, 0);
+				if (index == 0 || index == 1 || index == LB_ERR) { // 전체 메시지인 경우
+					sendToServer(serverSocket, CLT_MSG_ALLMSG, sizeof(msgData), (char*)&msg); // 전체 메시지
+					DisplayText("[%02d:%02d | %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, setup.myNick, buf);
+				}
+				else { // 귓속말인 경우
+					SendMessage(hList, LB_GETTEXT, index, (LPARAM)nick);
+					ptr = searchNick(nick);
+					if (ptr != NULL) {
+						strncpy(msg.nick, nick, strlen(nick) + 1);
+						sendToServer(serverSocket, CLT_MSG_WHISPER, sizeof(msgData), (char*)&msg); // 귓속말
+						DisplayText("[%02d:%02d | 귓속말 %s -> %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, setup.myNick, nick , msg.msg);
+					}
+				}
 			}
 			
 			EnableWindow(hDlg, TRUE);
@@ -142,23 +160,27 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			strncpy(setup.serverIP, ip, strlen(ip) + 1);
 			setup.serverPort = tempPort;
 
-			if (setup.connectFlag == 2) {
-				MessageBox(hDlg, "새로운 서버와 접속합니다.\n기존 서버는 종료됩니다.\n", "알림", MB_ICONINFORMATION);
+			if (setup.connectFlag == CONNECT_CHAT) {
+				setup.connectFlag = CONNECT_INIT;
 				TerminateThread(hMainRecv, 1);
-				WaitForSingleObject(hMainThread, INFINITE);
-				setup.connectFlag = 0;
+				TerminateThread(hSender, 1);
+				TerminateThread(hMainThread, 1);
+				closesocket(serverSocket);
+				//WaitForSingleObject(hMainThread, INFINITE);
+				MessageBox(hDlg, "새로운 서버와 접속합니다.\n기존 서버는 종료됩니다.\n", "알림", MB_ICONINFORMATION);
 			}
 
 			hMainThread = (HANDLE)_beginthreadex(NULL, 0, MainThread, NULL, 0, NULL); // Create Main Thread 
 			if (hMainThread == NULL) {
 				MessageBox(NULL, "클라이언트 시작을 실패했습니다.\n프로그램을 종료합니다.", "스레드 생성 실패", MB_ICONERROR);
+				exit(-1);
 			}
 			
-			EndDialog(hDlg, IDOK); // configuration dialog box finish
+			EndDialog(hDlg, IDCANCEL); // configuration dialog box finish
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG3), NULL, (DLGPROC)nickSetup_DlgProc);
 			return TRUE;
 		case IDCANCEL:
-			if (setup.connectFlag == 0) { // 최초 접속 시 setting값이 없으면 프로그램 강제 종료
+			if (setup.connectFlag == CONNECT_INIT) { // 최초 접속 시 setting값이 없으면 프로그램 강제 종료
 				MessageBox(hDlg, "접속한 채팅 방이 없습니다.\n프로그램을 종료합니다.", "실패", MB_ICONERROR);
 				exit(0);
 			}
@@ -195,25 +217,25 @@ BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 				return TRUE;
 			}
 
-			if (setup.connectFlag == 0) {
+			if (setup.connectFlag == CONNECT_INIT) {
 				MessageBox(hDlg, "서버를 설정을 하세요.\n\n[설정] -> [접속 설정]\n\n", "경고", MB_ICONERROR);
 				EndDialog(hDlg, IDOK); // 대화상자 종료
 				return TRUE;
 			}
 
-			else if (setup.connectFlag == 1) {
-				sendToServer(serverSocket, 1, strlen(newNick) + 1, newNick); // nickname 설정
+			else if (setup.connectFlag == CONNECT_SVR) {
+				sendToServer(serverSocket, CLT_MSG_NEWUSER, strlen(newNick) + 1, newNick); // nickname 설정
 			}
 
-			else if (setup.connectFlag == 2) {
-				sendToServer(serverSocket, 2, strlen(newNick) + 1, newNick); // nickname 변경
+			else if (setup.connectFlag == CONNECT_CHAT) {
+				sendToServer(serverSocket, CLT_MSG_CHGNICK, strlen(newNick) + 1, newNick); // nickname 변경
 			}
 
 			EnableWindow(hDlg, TRUE);
 			EndDialog(hDlg, IDOK); // 대화상자 종료
 			return TRUE;
 		case IDCANCEL: // 취소 버튼을 누른 경우 호출
-			if (setup.connectFlag == 1 || setup.connectFlag == 0) {
+			if (setup.connectFlag == CONNECT_SVR || setup.connectFlag == CONNECT_INIT) {
 				MessageBox(hDlg, "NickName을 입력하지 않으면\n\n채팅방에 접속할 수 없습니다.\n\n", "경고", MB_ICONERROR);
 			}
 			EnableWindow(hDlg, TRUE);
@@ -236,6 +258,7 @@ void DisplayText(char *fmt, ...) {
 	int nLength = GetWindowTextLength(hEdit1); // 해당 문자열의 길이를 반환한다.
 	SendMessage(hEdit1, EM_SETSEL, nLength, nLength); // 현재 hEdit1의 길이 뒤로 포인터를 이동 한 후
 	SendMessage(hEdit1, EM_REPLACESEL, FALSE, (LPARAM)cbuf); // 현재 위치에 cbuf 내용을 출력한다.
+
 	va_end(arg);
 }
 
@@ -333,4 +356,57 @@ BOOL check_nick(char* nickname) {
 	if (nickname[0] == '\n' || nickname[0] == '\r') // 대화명 첫 글자가 개행문자면 오류
 		return FALSE;
 	return TRUE;
+}
+
+
+
+void updateUserList() {
+	UserList* temp;
+	int count = 0;
+	
+	SendMessage(hList, LB_RESETCONTENT, 0, 0);
+	/*
+	SendMessage(hList, LB_DELETESTRING, 0, 0); // 삭제할 list 핸들, 삭제 플래그, 삭제할 index, NULL
+	SendMessage(hList, LB_DELETESTRING, 0, 0); // 삭제할 list 핸들, 삭제 플래그, 삭제할 index, NULL
+	
+	temp = userListHeader->next;
+	while (temp != NULL) {
+		SendMessage(hList, LB_DELETESTRING, 0, 0); // 삭제할 list 핸들, 삭제 플래그, 삭제할 index, NULL
+		temp = temp->next;
+	}
+	*/
+	temp = userListHeader;
+	
+	SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)"전체 사용자");
+	
+	while (temp != NULL) {
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)(temp->Nick));
+		temp = temp->next;
+	}
+	
+}
+
+int changeNick(char* oldNick, char* newNick) {
+	UserList* ptr;
+	int index;
+
+	index = SendMessage(hList, LB_FINDSTRING, 0, (LPARAM)(oldNick));
+	ptr = searchNick(oldNick);
+
+	if (ptr == NULL) {
+		// search error
+		return -1;
+	}
+
+	if (index == LB_ERR) {
+		// search error
+		return -1;
+	}
+
+	strncpy(ptr->Nick, newNick, strlen(newNick) + 1); // UserList update
+
+	SendMessage(hList, LB_DELETESTRING, index, 0); // List Box update
+	SendMessage(hList, LB_INSERTSTRING, index, (LPARAM)newNick);
+
+	return 0;
 }

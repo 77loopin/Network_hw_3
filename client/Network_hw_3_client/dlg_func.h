@@ -9,3 +9,5 @@ void DisplayText(char *fmt, ...);
 BOOL check_ip(char*,int);
 BOOL check_port(char*);
 BOOL check_nick(char*);
+void updateUserList();
+int changeNick(char*, char*);

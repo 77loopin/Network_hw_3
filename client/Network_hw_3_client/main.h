@@ -26,7 +26,8 @@ extern HANDLE hSendOverEvent;
 
 extern HWND hEdit1;
 extern HWND hEdit2;
-extern HWND hEdit3;
+//extern HWND hEdit3;
+extern HWND hList;
 
 extern HWND hMenu;
 

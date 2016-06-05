@@ -5,6 +5,27 @@
 #define MAXUSER 10
 
 
+#define CONNECT_INIT 0
+#define CONNECT_SVR 1
+#define CONNECT_CHAT 2
+
+
+#define CLT_MSG_NEWUSER 1
+#define CLT_MSG_CHGNICK 2
+#define CLT_MSG_ALLMSG 4
+#define CLT_MSG_WHISPER 5
+
+
+#define SVR_MSG_ADDUSER 1
+#define SVR_MSG_DELUSER 2
+#define SVR_MSG_CHGNICK 3
+#define SVR_MSG_ACCEPT 4
+#define SVR_MSG_DENY 5
+#define SVR_MSG_ALLMSG 6
+#define SVR_MSG_WHISPER 7
+#define SVR_MSG_ADVUSER 8
+
+
 typedef struct MESSAGEHEADER {
 	int flag;
 	int size;

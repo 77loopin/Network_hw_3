@@ -6,6 +6,8 @@ UINT WINAPI MainThread(LPVOID arg) {
 	SOCKET tempSocket;
 	int retval;
 
+	
+
 	tempSocket = getConnection(setup.serverIP, setup.serverPort);
 
 	if (tempSocket == -1) {
@@ -14,7 +16,7 @@ UINT WINAPI MainThread(LPVOID arg) {
 		return 0;
 	}
 
-	setup.connectFlag = 1;
+	setup.connectFlag = CONNECT_SVR;
 	serverSocket = tempSocket;
 	ResetEvent(hSendEvent);
 	SetEvent(hSendOverEvent);
@@ -31,7 +33,7 @@ UINT WINAPI MainThread(LPVOID arg) {
 		exit(-1);
 	}
 
-	MessageBox(NULL, "서버와 접속되었습니다.\n\n", "", MB_OK);
+	//MessageBox(NULL, "서버와 접속되었습니다.\n\n", "", MB_OK);
 	HANDLE hThread[2];
 	hThread[0] = hMainRecv;
 	hThread[1] = hSender;
@@ -51,11 +53,11 @@ UINT WINAPI MainThread(LPVOID arg) {
 
 	CloseHandle(hMainRecv);
 	CloseHandle(hSender);
-	if (setup.connectFlag == 2) {
-		MessageBox(NULL, "서버가 접속을 끊었습니다", "알림", MB_ICONINFORMATION);
-		setup.connectFlag = 0;
-		closesocket(serverSocket);
+	if (setup.connectFlag == CONNECT_CHAT) {
+		MessageBox(NULL, "서버와 접속이 끊어졌습니다", "알림", MB_ICONINFORMATION);
+		setup.connectFlag = CONNECT_INIT;
 	}
+	closesocket(serverSocket);
 	
 	return 0;
 }
@@ -69,9 +71,7 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 	UserList* temp;
 	char nickname[MAXNICK + 1];
 	struct tm *timeinfo;
-	int connectFlag;
 	int retval;
-	char ms[1000];
 
 	while (1) {
 		retval = recv(serverSocket, (char*)&header, sizeof(header), 0);
@@ -80,37 +80,34 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 			return 0;
 		}
 		timeinfo = gettime();
-		if (setup.connectFlag == 1) { // 채팅방 미 접속 상태
+		if (setup.connectFlag == CONNECT_SVR) { // 채팅방 미 접속 상태
 			switch (header.flag) {
-			case 4: // 채팅방 접속 허가
+			case SVR_MSG_ACCEPT: // 채팅방 접속 허가
 				retval = recv(serverSocket, nickname, header.size, 0); // nickname
 				if (retval == SOCKET_ERROR || retval == 0 )
 					return 0;
-				setup.connectFlag = 2;
+				setup.connectFlag = CONNECT_CHAT;
 				strncpy(setup.myNick,nickname, header.size);
 				strncpy(userList.Nick, setup.myNick, header.size);
 				delAllUser(); // 접속자 목록 초기화
-				MessageBox(NULL,"반갑습니다.\n\n채팅방에 접속했습니다.\n\n","채팅방 접속 성공",MB_ICONINFORMATION);
+				updateUserList();
+				MessageBox(NULL, "반갑습니다.\n\n채팅방에 접속하셨습니다.\n\n", "알림", MB_ICONINFORMATION);
 				break;
-			case 5: // chatting room deny
+			case SVR_MSG_DENY: // chatting room deny
 				MessageBox(NULL, "채팅방에 이미 존재하는 닉네임입니다.\n\n닉네임을 변경하세요.\n\n[설정] -> [닉네임 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
-				break;
-			case 0: // server deny
-				MessageBox(NULL, "더 이상 채팅방에 접속할 수 없습니다.\n\n다른 서버를 이용해주세요.\n\n[설정] -> [접속 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
-				// 일단 보류
 				break;
 			}
 		}
-		else if (setup.connectFlag == 2) { // 채팅방 접속 상태
+		else if (setup.connectFlag == CONNECT_CHAT) { // 채팅방 접속 상태
 			switch (header.flag) {
-			case 1: // chatting room user list add
+			case SVR_MSG_ADDUSER: // chatting room user list add
 				retval = recv(serverSocket, nickname, header.size, 0); // nickname
 				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
 				DisplayText("[%02d:%02d | info] : %s님이 접속하셨습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, nickname);
 				addUser(nickname);
 				break;
-			case 2: // chatting room user list remove
+			case SVR_MSG_DELUSER: // chatting room user list remove
 				retval = recv(serverSocket, nickname, header.size, 0); // nickname
 				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
@@ -118,35 +115,34 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 				delUser(nickname);
 				break;
 
-			case 3: // 닉네임 변경 내용
+			case SVR_MSG_CHGNICK: // 닉네임 변경 내용
 				retval = recv(serverSocket, (char*)&msg, header.size, 0); // nickname
 				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
 				DisplayText("[%02d:%02d | info] : %s님이 %s로 닉네임을 변경했습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, msg.msg,msg.nick);
-				temp = searchNick(msg.nick);
-				if (temp != NULL) {
-					strncpy(temp->Nick, msg.msg, strlen(msg.msg) + 1);
-				}
+				changeNick(msg.msg, msg.nick);
 				break;
-			case 4: // 닉네임 변경 허가
+			case SVR_MSG_ACCEPT: // 닉네임 변경 허가
 				retval = recv(serverSocket, nickname, header.size, 0); // nickname
 				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
-				setup.connectFlag = 2;
+				setup.connectFlag = CONNECT_CHAT;
 				DisplayText("[%02d:%02d | info] : %s님이 %s로 닉네임을 변경했습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, setup.myNick, nickname);
+				changeNick(setup.myNick, nickname);
+
 				strncpy(setup.myNick, nickname, header.size);
-				strncpy(userList.Nick, setup.myNick, header.size);
+
 				break;
-			case 5:
+			case SVR_MSG_DENY:
 				MessageBox(NULL, "채팅방에 이미 존재하는 닉네임입니다.\n\n닉네임을 변경하세요.\n\n[설정] -> [닉네임 설정]\n\n", "채팅방 접속 실패", MB_ICONERROR);
 				break;
-			case 6:
+			case SVR_MSG_ALLMSG:
 				retval = recv(serverSocket, (char*)&msg, header.size, 0); // message
 				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
 				DisplayText("[%02d:%02d | %s] : %s\n", timeinfo->tm_hour, timeinfo->tm_min, msg.nick, msg.msg);
 				break;
-			case 7:
+			case SVR_MSG_WHISPER:
 				retval = recv(serverSocket, (char*)&msg, header.size, 0);
 				if (retval == SOCKET_ERROR || retval == 0)	
 					return 0;
@@ -243,6 +239,7 @@ BOOL addUser(char* nick) {
 	temp->prev = ptr;
 	temp->next = NULL;
 	strncpy(temp->Nick, nick, strlen(nick) + 1);
+	SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)(temp->Nick));
 
 	return TRUE;
 }
@@ -250,6 +247,7 @@ BOOL addUser(char* nick) {
 
 int delUser(char* nick) {
 	UserList *temp;
+	int index;
 	temp = userListHeader->next;
 	while (temp != NULL) { // 삭제하려는 닉네임이 있으면
 		if (!strcmp(temp->Nick, nick)) {
@@ -261,7 +259,13 @@ int delUser(char* nick) {
 		}
 		temp = temp->next;
 	}
-	
+
+	index=SendMessage(hList, LB_FINDSTRING, 0, (LPARAM)(temp->Nick));
+	if (index == LB_ERR) {
+		// search error
+		return -1;
+	}
+	SendMessage(hList, LB_DELETESTRING, index, 0);
 	free(temp);
 	return 0;
 }
@@ -283,7 +287,7 @@ int delAllUser() {
 UserList* searchNick(char* nick) {
 	UserList *temp;
 
-	temp = userListHeader->next;
+	temp = userListHeader;
 
 	while (temp != NULL) {
 		if (!strcmp(temp->Nick, nick)) {

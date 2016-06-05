@@ -112,36 +112,35 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 					t = temp;
 					temp = temp->next;
 					strncpy(nick, t->Nick, strlen(t->Nick) + 1); // 퇴장한 사용자 닉네임 확인
-					sendToAllClient(t->clientSocket, 2, strlen(nick) + 1, nick); // 퇴장 여부 알림
+					sendToAllClient(t->clientSocket, SVR_MSG_DELUSER, strlen(nick) + 1, nick); // 퇴장 여부 알림
 					delUser(t);
 					continue;
 				}
 				switch (header.flag) {
-				case 1: // 채팅방 접속 시 닉네임 설정
+				case CLT_MSG_NEWUSER: // 채팅방 접속 시 닉네임 설정
 					retval = recv(temp->clientSocket, nick, header.size, 0);
 					if (retval == SOCKET_ERROR || retval == 0) {
 						return 0;
 					}
 					if (searchNick(nick) == NULL) { // 닉네임 사용 가능
 						strncpy(temp->Nick, nick, strlen(nick) + 1);
-						temp->connectFlag = 2;
+						temp->connectFlag = CONNECT_CHAT;
 						//sprintf(ms, "Send to client\nData : %s\n", nick); MessageBox(NULL, ms, "test", MB_OK);
-						sendToClient(temp->clientSocket, 4, strlen(nick) + 1, nick); // 닉네임 허가
-						sendToAllClient(temp->clientSocket, 1, strlen(nick) + 1, nick); // 다른 사용자에게 새로운 접속자 알림
+						sendToClient(temp->clientSocket, SVR_MSG_ACCEPT, strlen(nick) + 1, nick); // 닉네임 허가
+						sendToAllClient(temp->clientSocket, SVR_MSG_ADDUSER, strlen(nick) + 1, nick); // 다른 사용자에게 새로운 접속자 알림
 						ptr = userListHeader->next;
 						while (ptr != NULL) {
 							if (strcmp(ptr->Nick, temp->Nick)) {
-								sendToClient(temp->clientSocket, 8, strlen(ptr->Nick) + 1, ptr->Nick);
+								sendToClient(temp->clientSocket, SVR_MSG_ADVUSER, strlen(ptr->Nick) + 1, ptr->Nick);
 							}
 							ptr = ptr->next;
 						}
 					}
 					else {  // 접속 거부
-						//sprintf(ms, "Send to client\nDeny Nickname"); MessageBox(NULL, ms, "test", MB_OK);
-						sendToClient(temp->clientSocket, 5, 0, NULL); // 닉네임 설정 거부
+						sendToClient(temp->clientSocket, SVR_MSG_DENY, 0, NULL); // 닉네임 설정 거부
 					}
 					break;
-				case 2: // 채팅방에서 닉네임 변경 시
+				case CLT_MSG_CHGNICK: // 채팅방에서 닉네임 변경 시
 					retval = recv(temp->clientSocket, nick, header.size, 0);
 					if (retval == SOCKET_ERROR || retval == 0) {
 						return 0;
@@ -152,39 +151,36 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 
 						strncpy(temp->Nick, nick, strlen(nick) + 1); // nickname change
 
-						temp->connectFlag = 2;
+						temp->connectFlag = CONNECT_CHAT;
 						//sprintf(ms, "Send to client\nData : %s\n", nick); MessageBox(NULL, ms, "test", MB_OK);
-						sendToClient(temp->clientSocket, 4, strlen(nick) + 1, nick); // 닉네임 허가
-						sendToAllClient(temp->clientSocket, 3, sizeof(msg), (char*)&msg); // 다른 사용자에게 닉네임 변경 알림
+						sendToClient(temp->clientSocket, SVR_MSG_ACCEPT, strlen(nick) + 1, nick); // 닉네임 허가
+						sendToAllClient(temp->clientSocket, SVR_MSG_CHGNICK, sizeof(msg), (char*)&msg); // 다른 사용자에게 닉네임 변경 알림
 					}
 					else { // 변경 거부
 						//sprintf(ms, "Send to client\nDeny Nickname"); MessageBox(NULL, ms, "test", MB_OK);
-						sendToClient(temp->clientSocket, 5, 0, NULL); // 닉네임 변경 거부
+						sendToClient(temp->clientSocket, SVR_MSG_DENY, 0, NULL); // 닉네임 변경 거부
 					}
 					break;
-				case 4: // 전체 메시지
+				case CLT_MSG_ALLMSG: // 전체 메시지
 					retval = recv(temp->clientSocket, (char*)&msg, header.size, 0);
 					//sprintf(ms, "Nick : %s\nData : %s\n", msg.nick, msg.msg); MessageBox(NULL, ms, "test", MB_OK);
 					if (retval == SOCKET_ERROR || retval == 0) {
 						return 0;
 					}
-					sendToAllClient(temp->clientSocket, 6, sizeof(msgData), (char*)&msg);
+					sendToAllClient(temp->clientSocket, SVR_MSG_ALLMSG, sizeof(msgData), (char*)&msg);
 					break;
-				case 5: // 귓속말
+				case CLT_MSG_WHISPER: // 귓속말
 					retval = recv(temp->clientSocket, (char*)&msg, header.size, 0);
 					//sprintf(ms, "Nick : %s\nData : %s\n", msg.nick, msg.msg); MessageBox(NULL, ms, "test", MB_OK);
 					if (retval == SOCKET_ERROR || retval == 0) {
 						return 0;
 					}
-					ptr = userListHeader->next;
-					while (ptr != NULL) {
-						if (!strcmp(ptr->Nick,msg.nick)) {
-							break;
-						}
+					ptr = searchNick(msg.nick);
+					if (ptr != NULL) {
+						strncpy(msg.nick, temp->Nick, strlen(temp->Nick) + 1);
+						sendToClient(ptr->clientSocket, SVR_MSG_WHISPER, sizeof(msgData), (char*)&msg);
 					}
-					if (ptr != NULL) { // 없는 사용자에게 귓속말
-						sendToClient(ptr->clientSocket, 7, sizeof(msgData), (char*)&msg);
-					}
+
 				}
 			}
 			temp = temp->next;
@@ -210,7 +206,7 @@ BOOL addUser(SOCKET sock) {
 	temp2 = (UserList*)malloc(sizeof(UserList));
 	
 	temp2->clientSocket = sock;
-	temp2->connectFlag = 1;
+	temp2->connectFlag = CONNECT_SVR;
 	
 	temp2->next = temp1->next;
 	temp1->next = temp2;

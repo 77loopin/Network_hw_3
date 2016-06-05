@@ -29,7 +29,8 @@ UserList* userListHeader = NULL;
 
 HWND hEdit1;
 HWND hEdit2;
-HWND hEdit3;
+//HWND hEdit3;
+HWND hList;
 
 HWND hMenu;
 
