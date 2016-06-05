@@ -6,6 +6,8 @@
 #include "sock_func.h"
 
 
+LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
 extern HINSTANCE hInst;
 extern CRITICAL_SECTION cs;
 extern WSADATA wsa_data;
@@ -21,3 +23,5 @@ extern HANDLE hMainRecv;
 extern HANDLE hSender;
 extern HANDLE hSendEvent;
 extern HANDLE hSendOverEvent;
+
+extern HWND hEdit;

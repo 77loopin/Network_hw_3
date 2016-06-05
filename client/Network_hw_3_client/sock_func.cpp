@@ -16,6 +16,8 @@ UINT WINAPI MainThread(LPVOID arg) {
 
 	setup.connectFlag = 1;
 	serverSocket = tempSocket;
+	ResetEvent(hSendEvent);
+	SetEvent(hSendOverEvent);
 
 	hMainRecv = (HANDLE)_beginthreadex(NULL, 0, MainReceiver, NULL, 0, NULL);
 	if (hMainRecv == NULL) {
@@ -36,15 +38,22 @@ UINT WINAPI MainThread(LPVOID arg) {
 	retval = WaitForMultipleObjects(2, hThread, TRUE, INFINITE);
 
 	retval -= WAIT_OBJECT_0;
-	if (retval == 0)
+	if (retval == 0) {
 		TerminateThread(hSender, 1);
-	else
+	}
+	else if (retval == 1) {
 		TerminateThread(hMainRecv, 1);
+	}
+	else if (retval == WAIT_FAILED){
+		TerminateThread(hSender, 1);
+		TerminateThread(hMainRecv, 1);
+	}
 
 	CloseHandle(hMainRecv);
 	CloseHandle(hSender);
 	if (setup.connectFlag == 2) {
 		MessageBox(NULL, "서버가 접속을 끊었습니다", "알림", MB_ICONINFORMATION);
+		setup.connectFlag = 0;
 		closesocket(serverSocket);
 	}
 	
@@ -183,7 +192,7 @@ UINT WINAPI MsgSender(LPVOID arg) {
 
 		SetEvent(hSendOverEvent);
 	}
-
+	MessageBox(NULL, "Sender Exit", "eee", 0);
 	return retval;
 }
 

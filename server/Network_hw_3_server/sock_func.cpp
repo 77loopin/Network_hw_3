@@ -41,6 +41,7 @@ UINT WINAPI MsgSender(LPVOID arg) {
 UINT WINAPI MainReceiver(LPVOID arg) {
 	SOCKET clientSocket;
 	SOCKADDR_IN clientInfo;
+	SOCKADDR_IN serverInfo;
 	msgHeader header;
 	UserList* temp;
 	UserList* ptr;
@@ -52,6 +53,25 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 	int size = sizeof(clientInfo);
 	int retval;
 	char ms[500]; // test¿ë
+
+	serverInfo.sin_family = AF_INET;
+	serverInfo.sin_port = htons(9999);
+	serverInfo.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (serverSocket == INVALID_SOCKET) {
+		err_quit("socket()");
+	}
+
+	retval = bind(serverSocket, (SOCKADDR*)&serverInfo, sizeof(serverInfo));
+	if (retval == SOCKET_ERROR) {
+		err_quit("bind()");
+	}
+
+	retval = listen(serverSocket, 5);
+	if (retval == -1) {
+		err_quit("listen()");
+	}
 
 	while (1) {
 		FD_ZERO(&fdSet);

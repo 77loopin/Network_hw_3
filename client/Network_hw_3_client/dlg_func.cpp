@@ -188,16 +188,16 @@ BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 			EnableWindow(hDlg, FALSE);
 			GetDlgItemText(hDlg, IDC_EDIT1, newNick, MAXNICK + 1); // IDC_EDIT1의 문자열을 newNick에 저장
 
-			if (strlen(newNick) == 0 || !check_nick(newNick)) { // 새로 입력된 대화명이 유효한지 확인
+			if (!check_nick(newNick)) { // 새로 입력된 대화명이 유효한지 확인
 				MessageBox(hDlg, "NickName을 입력하세요.\n", "경고", MB_ICONERROR);
-				SetFocus(hEdit);
+				//SetFocus(hEdit);
 				EnableWindow(hDlg, TRUE);
-				return FALSE;
+				return TRUE;
 			}
 
 			if (setup.connectFlag == 0) {
 				MessageBox(hDlg, "서버를 설정을 하세요.\n\n[설정] -> [접속 설정]\n\n", "경고", MB_ICONERROR);
-				EndDialog(hDlg, IDCANCEL); // 대화상자 종료
+				EndDialog(hDlg, IDOK); // 대화상자 종료
 				return TRUE;
 			}
 
@@ -209,11 +209,8 @@ BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 				sendToServer(serverSocket, 2, strlen(newNick) + 1, newNick); // nickname 변경
 			}
 
-			// 대화명을 변경 했다는 것을 화면에 출력
-			//MessageBox(hDlg, "닉네임을 변경했습니다.\n", "확인", MB_OK);
-			
 			EnableWindow(hDlg, TRUE);
-			EndDialog(hDlg, IDCANCEL); // 대화상자 종료
+			EndDialog(hDlg, IDOK); // 대화상자 종료
 			return TRUE;
 		case IDCANCEL: // 취소 버튼을 누른 경우 호출
 			if (setup.connectFlag == 1 || setup.connectFlag == 0) {
@@ -223,6 +220,7 @@ BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 			EndDialog(hDlg, IDCANCEL); // 대화상자 종료
 			return TRUE;
 		}
+		return FALSE;
 	}
 	return FALSE;
 }
