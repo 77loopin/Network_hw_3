@@ -1,4 +1,5 @@
-// 2016년 1학기 네트워크프로그램 숙제 3번 서버
+// 2016년 1학기 네트워크프로그램 숙제 3번
+// Server
 // 성명 : 백승재
 // 학번 : 101969
 
@@ -27,8 +28,9 @@ HANDLE hSendOverEvent; // 메시지 전송이 끝났다는 event
 
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-	int retval;
 
+	int retval;
+	// 인스턴스 정보 저장
 	hInst = hInstance;
 	
 	// init critical section
@@ -38,16 +40,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		err_quit("WSAStartup()");
 	}
 
+	// Send를 위한 2개의 이벤트 생성
 	hSendEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 	if (hSendEvent == NULL) err_quit("CreateEvent()");
 
 	hSendOverEvent = CreateEvent(NULL, FALSE, TRUE, NULL);
 	if (hSendOverEvent == NULL) err_quit("CreateEvent()");
 
+	// UserList 구조체 초기화
 	memset(&userList, 0, sizeof(userList));
 	userListHeader = &userList;
 
-
+	// WINDOW 생성
 	WNDCLASS wndclass;
 	wndclass.style = CS_HREDRAW | CS_VREDRAW;
 	wndclass.lpfnWndProc = WndProc;
@@ -66,16 +70,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
+	// Receiver Thread 생성
 	hMainRecv = (HANDLE)_beginthreadex(NULL, 0, MainReceiver, NULL, 0, NULL);
 	if (hMainRecv == NULL) {
 		MessageBox(NULL, "스레드 생성 실패.\n\n프로그램 종료.\n\n", "오류", MB_ICONERROR);
 	}
+	// Sender Thread 생성
 	hSender = (HANDLE)_beginthreadex(NULL, 0, MsgSender, NULL, 0, NULL);
 	if (hSender == NULL) {
 		MessageBox(NULL, "스레드 생성 실패.\n\n프로그램 종료.\n\n", "오류", MB_ICONERROR);
 	}
-
-	//retval = WaitForSingleObject(hMainRecv, INFINITE);
 
 	MSG msg;
 	while (GetMessage(&msg, 0, 0, 0) > 0) {
@@ -84,8 +88,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 
 	DeleteCriticalSection(&cs);
+
 	CloseHandle(hSender);
 	CloseHandle(hMainRecv);
+	
 	WSACleanup();
 	
 	return msg.wParam;

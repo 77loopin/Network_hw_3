@@ -33,7 +33,6 @@ UINT WINAPI MainThread(LPVOID arg) {
 		exit(-1);
 	}
 
-	//MessageBox(NULL, "서버와 접속되었습니다.\n\n", "", MB_OK);
 	HANDLE hThread[2];
 	hThread[0] = hMainRecv;
 	hThread[1] = hSender;
@@ -75,7 +74,6 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 
 	while (1) {
 		retval = recv(serverSocket, (char*)&header, sizeof(header), 0);
-		//sprintf(ms, "%d process\n\nflag : %d\nsize : %d\n",getpid(),header.flag,header.size); MessageBox(NULL, ms, "test", MB_OK);
 		if (retval == SOCKET_ERROR || retval == 0) {
 			return 0;
 		}
@@ -120,6 +118,7 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 				if (retval == SOCKET_ERROR || retval == 0)
 					return 0;
 				DisplayText("[%02d:%02d | info] : %s님이 %s로 닉네임을 변경했습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, msg.msg,msg.nick);
+				//updateUserList();
 				changeNick(msg.msg, msg.nick);
 				break;
 			case SVR_MSG_ACCEPT: // 닉네임 변경 허가
@@ -128,6 +127,7 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 					return 0;
 				setup.connectFlag = CONNECT_CHAT;
 				DisplayText("[%02d:%02d | info] : %s님이 %s로 닉네임을 변경했습니다.\n", timeinfo->tm_hour, timeinfo->tm_min, setup.myNick, nickname);
+				//updateUserList();
 				changeNick(setup.myNick, nickname);
 
 				strncpy(setup.myNick, nickname, header.size);
@@ -169,19 +169,16 @@ UINT WINAPI MsgSender(LPVOID arg) {
 
 		header.flag = sendArgument.flag;
 		header.size = sendArgument.size;
-		//sprintf(ms, "flag : %d\nsize : %d\n",header.flag,header.size); MessageBox(NULL, ms, "test", MB_OK);
 
 		retval = send(sendArgument.sock, (char*)&header, sizeof(header), 0);
 
 		if (retval == SOCKET_ERROR) {
-			//MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
 			break;
 		}
 
 		if (header.size != 0) {
 			retval = send(sendArgument.sock, (char*)sendArgument.Data, header.size, 0);
 			if (retval == SOCKET_ERROR) {
-				//	MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
 				break;
 			}
 		}
@@ -217,18 +214,46 @@ SOCKET getConnection(char* ip, int port) {
 	retval = connect(sock, (SOCKADDR*)&dest, sizeof(dest));
 
 	if (retval == SOCKET_ERROR) {
-		//display_MB("서버와의 연결에 실패했습니다.\n\n서버 설정을 다시 확인해주시기 바랍니다.\n\n");
-		//err_MB("connect()");
 		return -1;
 	}
 
 	return sock;
 }
 
+
+// 보내려는 소켓(sock)
+// 보내는 메시지 종류(flag)
+// 보내는 메시지 크기(size)
+// 보내는 메시지 데이터(Data)를 입력 받아
+// 상대에게 데이터를 보내는 함수
+int sendToServer(SOCKET sock, int flag, int size, char* Data) {
+
+	WaitForSingleObject(hSendOverEvent, INFINITE);
+
+	memcpy(&sendArgument.Data, Data, size);
+	sendArgument.sock = sock;
+	sendArgument.flag = flag;
+	sendArgument.size = size;
+
+	SetEvent(hSendEvent);
+
+
+	return size + sizeof(msgHeader);
+}
+
+
+struct tm* gettime() {
+	time_t timer;
+	timer = time(NULL);
+	return localtime(&timer);
+}
+
+
+
 BOOL addUser(char* nick) {
 	UserList* temp;
 	UserList* ptr = userListHeader;
-	
+
 	temp = (UserList*)malloc(sizeof(UserList));
 
 	while (ptr->next != NULL) {
@@ -260,7 +285,7 @@ int delUser(char* nick) {
 		temp = temp->next;
 	}
 
-	index=SendMessage(hList, LB_FINDSTRING, 0, (LPARAM)(temp->Nick));
+	index = SendMessage(hList, LB_FINDSTRING, 0, (LPARAM)(temp->Nick));
 	if (index == LB_ERR) {
 		// search error
 		return -1;
@@ -279,7 +304,7 @@ int delAllUser() {
 		userListHeader->next = temp->next;
 		free(temp);
 	}
-	
+
 	return 0;
 }
 
@@ -297,32 +322,4 @@ UserList* searchNick(char* nick) {
 	}
 
 	return temp; // 노드가 없으면
-}
-
-
-// 보내려는 소켓(sock)
-// 보내는 메시지 종류(flag)
-// 보내는 메시지 크기(size)
-// 보내는 메시지 데이터(Data)를 입력 받아
-// 상대에게 데이터를 보내는 함수
-int sendToServer(SOCKET sock, int flag, int size, char* Data) {
-
-	WaitForSingleObject(hSendOverEvent, INFINITE);
-
-	memcpy(&sendArgument.Data, Data, size);
-	sendArgument.sock = sock;
-	sendArgument.flag = flag;
-	sendArgument.size = size;
-
-	SetEvent(hSendEvent);
-
-
-	return size + sizeof(msgHeader);
-}
-
-
-struct tm* gettime() {
-	time_t timer;
-	timer = time(NULL);
-	return localtime(&timer);
 }

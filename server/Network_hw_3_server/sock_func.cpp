@@ -11,19 +11,16 @@ UINT WINAPI MsgSender(LPVOID arg) {
 		
 		header.flag = sendArgument.flag;
 		header.size = sendArgument.size;
-		//sprintf(ms, "flag : %d\nsize : %d\n",header.flag,header.size); MessageBox(NULL, ms, "test", MB_OK);
 
 		retval = send(sendArgument.sock, (char*)&header, sizeof(header), 0);
 
 		if (retval == SOCKET_ERROR) {
-			//MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
 			break;
 		}
 
 		if (header.size != 0) {
 			retval = send(sendArgument.sock, (char*)sendArgument.Data, header.size, 0);
 			if (retval == SOCKET_ERROR) {
-				//	MessageBox(NULL, "Send Error", "Error", MB_ICONERROR);
 				break;
 			}
 		}
@@ -52,7 +49,6 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 	char message[MAXMSG + 1];
 	int size = sizeof(clientInfo);
 	int retval;
-	char ms[500]; // test용
 
 	serverInfo.sin_family = AF_INET;
 	serverInfo.sin_port = htons(9999);
@@ -104,7 +100,6 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 		temp = userListHeader->next;
 
 		while (temp != NULL) {
-			//sprintf(ms, "check fd = %d", temp->clientSocket); MessageBox(NULL, ms, "test", MB_OK);
 			if (FD_ISSET(temp->clientSocket, &fdSet)) {
 				retval = recv(temp->clientSocket, (char*)&header, sizeof(header), 0);
 				if (retval == SOCKET_ERROR || retval == 0) { // 클라이언트 접속 종료 시
@@ -125,7 +120,6 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 					if (searchNick(nick) == NULL) { // 닉네임 사용 가능
 						strncpy(temp->Nick, nick, strlen(nick) + 1);
 						temp->connectFlag = CONNECT_CHAT;
-						//sprintf(ms, "Send to client\nData : %s\n", nick); MessageBox(NULL, ms, "test", MB_OK);
 						sendToClient(temp->clientSocket, SVR_MSG_ACCEPT, strlen(nick) + 1, nick); // 닉네임 허가
 						sendToAllClient(temp->clientSocket, SVR_MSG_ADDUSER, strlen(nick) + 1, nick); // 다른 사용자에게 새로운 접속자 알림
 						ptr = userListHeader->next;
@@ -152,18 +146,15 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 						strncpy(temp->Nick, nick, strlen(nick) + 1); // nickname change
 
 						temp->connectFlag = CONNECT_CHAT;
-						//sprintf(ms, "Send to client\nData : %s\n", nick); MessageBox(NULL, ms, "test", MB_OK);
 						sendToClient(temp->clientSocket, SVR_MSG_ACCEPT, strlen(nick) + 1, nick); // 닉네임 허가
 						sendToAllClient(temp->clientSocket, SVR_MSG_CHGNICK, sizeof(msg), (char*)&msg); // 다른 사용자에게 닉네임 변경 알림
 					}
 					else { // 변경 거부
-						//sprintf(ms, "Send to client\nDeny Nickname"); MessageBox(NULL, ms, "test", MB_OK);
 						sendToClient(temp->clientSocket, SVR_MSG_DENY, 0, NULL); // 닉네임 변경 거부
 					}
 					break;
 				case CLT_MSG_ALLMSG: // 전체 메시지
 					retval = recv(temp->clientSocket, (char*)&msg, header.size, 0);
-					//sprintf(ms, "Nick : %s\nData : %s\n", msg.nick, msg.msg); MessageBox(NULL, ms, "test", MB_OK);
 					if (retval == SOCKET_ERROR || retval == 0) {
 						return 0;
 					}
@@ -171,7 +162,6 @@ UINT WINAPI MainReceiver(LPVOID arg) {
 					break;
 				case CLT_MSG_WHISPER: // 귓속말
 					retval = recv(temp->clientSocket, (char*)&msg, header.size, 0);
-					//sprintf(ms, "Nick : %s\nData : %s\n", msg.nick, msg.msg); MessageBox(NULL, ms, "test", MB_OK);
 					if (retval == SOCKET_ERROR || retval == 0) {
 						return 0;
 					}

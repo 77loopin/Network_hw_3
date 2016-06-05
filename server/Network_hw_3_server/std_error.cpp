@@ -1,10 +1,12 @@
 #include "main.h"
 
 
+// MessageBox를 생성하는 함수 ( 잘 사용 안함 )
 void display_MB(char* msg) {
 	MessageBox(NULL, msg, "Information", MB_ICONINFORMATION);
 }
 
+// 발생한 에러에 대해 MessageBox를 생성하는 함수
 void err_MB(char* msg) {
 	LPVOID lpMsgBuf;
 	FormatMessage(

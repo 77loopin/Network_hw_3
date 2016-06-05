@@ -1,6 +1,6 @@
 #include "dlg_func.h"
 
-	
+// Main DialogBox
 BOOL CALLBACK main_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 	static char buf[MAXMSG + 1];
@@ -10,27 +10,20 @@ BOOL CALLBACK main_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	struct tm* timeinfo;
 	BOOL retval;
 	int index;
-	char ms[1000];
 
 	switch (uMsg) {
 	case WM_INITDIALOG :
 
-		DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG2), NULL, (DLGPROC)setup_DlgProc);
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG2), NULL, (DLGPROC)setup_DlgProc); // setup dialog box 호출
 		
 		hEdit1 = GetDlgItem(hDlg, IDC_EDIT1); // 메시지 출력창
 		hEdit2 = GetDlgItem(hDlg, IDC_EDIT2); // 메시지 입력창
 		hList = GetDlgItem(hDlg, IDC_LIST2); // 접속자 리스트
-		//hEdit3 = GetDlgItem(hDlg, IDC_EDIT3); // 사용자 현황 ( 수정 예정 )
-		hMenu = GetDlgItem(hDlg, IDR_MENU1);
 
-		/*
-		if (setup.connectFlag == 1) {
-			display_MB("닉네임이 설정해야합니다.\n\n메뉴에서 닉네임을 설정해주세요.\n\n");
-			EnableWindow(
-			, FALSE);
-		}
-		*/
+		hMenu = GetDlgItem(hDlg, IDR_MENU1); // 메뉴 핸들
+
 		SendMessage(hEdit2, EM_SETLIMITTEXT, MAXMSG, 0);
+
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)"전체 사용자");
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)userList.Nick);
 		
@@ -122,7 +115,6 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		hIp = GetDlgItem(hDlg, IDC_IPADDRESS1); // IDC_IPADDRESS1의 핸들을 가져온다.
 		hPort = GetDlgItem(hDlg, IDC_EDIT1); // IDC_EDIT1의 핸들을 가져온다.
 		SendMessage(hPort, EM_SETLIMITTEXT, 5, 0); // port의 최대 입력 크기를 5로 설정한다. (최대 65535이므로)
-		//SendMessage(hNick, EM_SETLIMITTEXT, MAXNICK, 0); // 대화명 입력의 최대 크기를 설정한다.
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
@@ -150,13 +142,6 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				return FALSE;	
 			}
 
-			// 임시로 127.0.0.1만 접속 가능하도록 했음 ( 추후 삭제하면 다른 서버 IP로도 접속 가능함 )
-			if (strncmp(ip, "127.0.0.1", iplen)) {
-				MessageBox(hDlg, "유효한 서버 IP가 아닙니다.\n\n서버 IP를 확인해주시기 바랍니다.\n\n[임시 서버 IP : 127.0.0.1]\n\n","서버 IP 오류",MB_ICONERROR);
-				EnableWindow(hDlg, TRUE);
-				return FALSE;
-			}
-
 			strncpy(setup.serverIP, ip, strlen(ip) + 1);
 			setup.serverPort = tempPort;
 
@@ -166,7 +151,7 @@ BOOL CALLBACK setup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				TerminateThread(hSender, 1);
 				TerminateThread(hMainThread, 1);
 				closesocket(serverSocket);
-				//WaitForSingleObject(hMainThread, INFINITE);
+
 				MessageBox(hDlg, "새로운 서버와 접속합니다.\n기존 서버는 종료됩니다.\n", "알림", MB_ICONINFORMATION);
 			}
 
@@ -202,7 +187,6 @@ BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 	case WM_INITDIALOG: // 프로그램을 처음 실행 했을 때 초기화
 		hEdit = GetDlgItem(hDlg, IDC_EDIT1); // IDC_EDIT1의 핸들을 가져온다.
 		SendMessage(hEdit, EM_SETLIMITTEXT, MAXNICK, 0); // 대화명의 최대 입력 크기를 설정한다.
-		//MessageBox(hDlg, "NickName을 입력하세요.\n", "Information", MB_ICONINFORMATION);
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
@@ -212,7 +196,6 @@ BOOL CALLBACK nickSetup_DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 			if (!check_nick(newNick)) { // 새로 입력된 대화명이 유효한지 확인
 				MessageBox(hDlg, "NickName을 입력하세요.\n", "경고", MB_ICONERROR);
-				//SetFocus(hEdit);
 				EnableWindow(hDlg, TRUE);
 				return TRUE;
 			}
@@ -365,16 +348,7 @@ void updateUserList() {
 	int count = 0;
 	
 	SendMessage(hList, LB_RESETCONTENT, 0, 0);
-	/*
-	SendMessage(hList, LB_DELETESTRING, 0, 0); // 삭제할 list 핸들, 삭제 플래그, 삭제할 index, NULL
-	SendMessage(hList, LB_DELETESTRING, 0, 0); // 삭제할 list 핸들, 삭제 플래그, 삭제할 index, NULL
-	
-	temp = userListHeader->next;
-	while (temp != NULL) {
-		SendMessage(hList, LB_DELETESTRING, 0, 0); // 삭제할 list 핸들, 삭제 플래그, 삭제할 index, NULL
-		temp = temp->next;
-	}
-	*/
+
 	temp = userListHeader;
 	
 	SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)"전체 사용자");
@@ -390,16 +364,16 @@ int changeNick(char* oldNick, char* newNick) {
 	UserList* ptr;
 	int index;
 
-	index = SendMessage(hList, LB_FINDSTRING, 0, (LPARAM)(oldNick));
+	index = SendMessage(hList, LB_FINDSTRINGEXACT, 0, (LPARAM)(oldNick));
 	ptr = searchNick(oldNick);
 
 	if (ptr == NULL) {
-		// search error
+		MessageBox(NULL, "User Search Error", "Error", MB_ICONERROR);
 		return -1;
 	}
 
 	if (index == LB_ERR) {
-		// search error
+		MessageBox(NULL, "Index Search Error", "Error", MB_ICONERROR);
 		return -1;
 	}
 
