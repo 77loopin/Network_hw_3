@@ -87,23 +87,32 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		DispatchMessage(&msg);
 	}
 
+	// Critical Section 제거
 	DeleteCriticalSection(&cs);
 
+	// Thread 제거
 	CloseHandle(hSender);
 	CloseHandle(hMainRecv);
+
+	// Event Handle 제거
+	CloseHandle(hSendEvent);
+	CloseHandle(hSendOverEvent);
 	
+	// WINSOCK 제거
 	WSACleanup();
 	
 	return msg.wParam;
 }
 
+
+// 생성된 window에서 실행될 callback 함수
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	SOCKADDR_IN serverInfo;
 	int retval;
 	static HWND hEdit;
 
 	switch (uMsg) {
-	case WM_CREATE :
+	case WM_CREATE : // 초기화
 		hEdit = CreateWindow("edit", NULL,
 			WS_CHILD | WS_VISIBLE | WS_HSCROLL |
 			WS_VSCROLL | ES_AUTOHSCROLL |
@@ -116,7 +125,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	case WM_SETFOCUS:
 		SetFocus(hEdit);
 		return 0;
-	case WM_DESTROY:
+	case WM_DESTROY: // 종료시
 		PostQuitMessage(0);
 		return 0;
 	}
